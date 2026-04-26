@@ -1,0 +1,16 @@
+# Enforce LF line endings everywhere. Important: dev machine is Windows but Vercel
+# builds on Linux. Without this, CRLF differences show up as phantom diffs and can
+# break shell scripts, migration files, and git hooks.
+
+* text=auto eol=lf
+
+# Treat these as binary so git doesn't try to normalize them
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
