@@ -157,7 +157,9 @@ After build: update § 9 here (next task), append an entry to `docs/CHANGELOG.md
 
 - All schema changes go through Supabase CLI migration files in `supabase/migrations/`. Never apply DDL through the dashboard SQL editor or MCP `execute_sql`.
 - Migrations are checked into git and PR-reviewed.
-- The `consent_log` table has no UPDATE or DELETE RLS policies — there is no legitimate reason to mutate consent records.
+- The `consent_log` table has no UPDATE or DELETE RLS policies AND has `update`/`delete` revoked from `authenticated, anon, public` — no legitimate reason to mutate consent records. Service role still bypasses RLS, so the discipline is also enforced in app code: no code path writes to `consent_log` except the initial INSERT in `/api/leads`.
+- **30-day phone dedup is enforced in `/api/leads`, not via a DB partial unique index.** The playbook spec at `02_Technical_Reference.md` § 5.1 has `where created_at > now() - interval '30 days'` on a partial unique index, but PostgreSQL requires partial-index predicates to use IMMUTABLE functions and `now()` is STABLE — the migration fails. The 30-day rule lives in API code instead.
+- **Migration verification rule:** after `supabase db push`, run `supabase db diff --linked` and confirm no diff in **authored objects** (tables, columns, indexes, RLS policies, grants, comments we wrote). Diffs in Supabase Cloud platform defaults (e.g., `pg_net` extension state, default role grants on auto-created tables, `rls_auto_enable` event trigger) are environment drift, not regressions — accept and move on.
 
 ---
 
@@ -193,6 +195,8 @@ See `docs/CHANGELOG.md`.
 
 ### Next immediate task
 
-Initial Supabase setup: create the `mpl-dev` and `mpl-prod` projects in the Supabase dashboard, then write the baseline migration for `leads`, `consent_log`, `agents`, `lead_events`, `suppressions`, `dnc_registry` per `02_Technical_Reference.md` Part 5. Enable RLS on every table with server-only write policies.
+Wire up Supabase clients (server + browser) and verify connection from the Next.js app per `03_Build_Plan.md` Week 1 § Bootstrap and `02_Technical_Reference.md` Part 1.8 (security model: `import "server-only"` on any file using `SUPABASE_SERVICE_ROLE_KEY`). Goal: a tiny verification page or server action that reads from the linked Supabase project so we know the env wiring works before building the form.
+
+After that: landing page skeleton → form + `/api/leads` (Week 2). The `mpl-prod` Supabase project + baseline migration is a separate task deferred until launch is imminent (free-tier projects pause after 7 days of inactivity).
 
 > **Convention:** § 9 holds only the next immediate task. Completed items move to `docs/CHANGELOG.md`.
