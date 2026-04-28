@@ -160,6 +160,8 @@ After build: update § 9 here (next task), append an entry to `docs/CHANGELOG.md
 - The `consent_log` table has no UPDATE or DELETE RLS policies AND has `update`/`delete` revoked from `authenticated, anon, public` — no legitimate reason to mutate consent records. Service role still bypasses RLS, so the discipline is also enforced in app code: no code path writes to `consent_log` except the initial INSERT in `/api/leads`.
 - **30-day phone dedup is enforced in `/api/leads`, not via a DB partial unique index.** The playbook spec at `02_Technical_Reference.md` § 5.1 has `where created_at > now() - interval '30 days'` on a partial unique index, but PostgreSQL requires partial-index predicates to use IMMUTABLE functions and `now()` is STABLE — the migration fails. The 30-day rule lives in API code instead.
 - **Migration verification rule:** after `supabase db push`, run `supabase db diff --linked` and confirm no diff in **authored objects** (tables, columns, indexes, RLS policies, grants, comments we wrote). Diffs in Supabase Cloud platform defaults (e.g., `pg_net` extension state, default role grants on auto-created tables, `rls_auto_enable` event trigger) are environment drift, not regressions — accept and move on.
+- **Tables created in migrations must include explicit `GRANT` statements** for any role that needs access (typically `service_role`, sometimes `authenticated` for Phase 2). The Supabase project's "Automatically expose new tables" setting is **disabled at the project level by design**, so migration-created tables receive no default CRUD grants. Skipping the GRANTs surfaces as `permission denied for table X` (SQLSTATE 42501) — the failure mode that motivated the `20260426202626_grant_service_role.sql` migration.
+- **Anon writes are blocked at the grants layer in Phase 1.** RLS policies are in place as a second layer but are **not exercised by current tests** because anon has no grants. When Phase 2 grants any privilege to `anon` or `authenticated`, that migration's verification must include an RLS-specific test (a request that satisfies grants but fails RLS — i.e., expect `"new row violates row-level security policy"`) to confirm the second layer is wired correctly.
 
 ---
 
@@ -195,8 +197,8 @@ See `docs/CHANGELOG.md`.
 
 ### Next immediate task
 
-Wire up Supabase clients (server + browser) and verify connection from the Next.js app per `03_Build_Plan.md` Week 1 § Bootstrap and `02_Technical_Reference.md` Part 1.8 (security model: `import "server-only"` on any file using `SUPABASE_SERVICE_ROLE_KEY`). Goal: a tiny verification page or server action that reads from the linked Supabase project so we know the env wiring works before building the form.
+Build the landing page skeleton (HTML structure, basic styles, placeholder content) per `03_Build_Plan.md` Week 1 § Bootstrap. Replace the create-next-app boilerplate at `src/app/page.tsx` with a single-page layout matching the structure in `02_Technical_Reference.md` Part 2.2 (above-the-fold hero, below-the-fold trust block, form placeholder). No real form logic yet — that's the Week 2 task. Mobile-first per Part 2.4.
 
-After that: landing page skeleton → form + `/api/leads` (Week 2). The `mpl-prod` Supabase project + baseline migration is a separate task deferred until launch is imminent (free-tier projects pause after 7 days of inactivity).
+After the skeleton: form + `/api/leads` (Week 2 — the compliance-load-bearing task). The `mpl-prod` Supabase project + baseline migration is a separate task deferred until launch is imminent (free-tier projects pause after 7 days of inactivity).
 
 > **Convention:** § 9 holds only the next immediate task. Completed items move to `docs/CHANGELOG.md`.
