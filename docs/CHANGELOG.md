@@ -4,6 +4,16 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-04-29 — Landing page skeleton
+
+- Replaced the create-next-app boilerplate at `src/app/page.tsx` with the Phase 1 landing page skeleton per `02_Technical_Reference.md` Part 2.2: hero (`<h1>` + sub + CTA + trust bar), how-it-works (3 numbered steps), `<section id="lead-form">` form placeholder for the Week 2 task to drop into, social proof placeholder, FAQ (5 `<details>` Q&As, native expand/collapse, no JS), footer with `/privacy` + `/terms` links, contact, and California Privacy Notice marker
+- Server component (default for App Router); Tailwind v4; mobile-first with `sm:`/`md:` breakpoints; tap targets ≥ 44×44px on the hero CTA, "How it works" step circles, FAQ summaries, and footer links; CTA scrolls to the form via `<a href="#lead-form">` + site-wide `html { scroll-behavior: smooth }`
+- Swapped Geist for Inter (`next/font/google`) per Part 2.5; updated `metadata.title` and `metadata.description` from boilerplate to placeholder marketing values; removed the dark-mode `@media (prefers-color-scheme: dark)` block from `globals.css` (marketing pages are designed in one tuned palette)
+- Deleted five unused boilerplate icons: `public/{file,globe,next,vercel,window}.svg`. The now-empty `public/` directory was also removed by git (Next.js doesn't require it; will be recreated when we add a real favicon or hero image)
+- **Compliance-safe placeholder copy** per Part 2.3 + `AGENTS.md` § 6: no `$` amounts, no "guaranteed", no "free" near insurance references, no fear language, no false urgency. Two architect-mandated specifics: (a) H1 is the literal string `[HEADLINE PLACEHOLDER]` rather than directional copy — H1 is the most screenshot-quotable string, easier to never accidentally ship; (b) "How it works" step 3 says "reach out shortly", not "within 2 minutes" — the 2-minute SLA is an internal operational commitment between us and the agent (per `01_Strategy_and_Offer.md` Part 3 and `04_Operations_Runbook.md` Part 2), not a consumer-facing promise (refund/misrepresentation risk if put in user copy)
+- **Explicitly NOT shipped** in this task: real form logic, Zod schemas, real testimonials, real FAQ answers, `/privacy`, `/terms`, real California Privacy Notice text, brand name/logo, favicon. Each is a downstream task
+- Verification: `pnpm lint` and `pnpm build` pass; `/` is classified `○ (Static)` (prerendered at build); compliance scan against `src/app/page.tsx` source confirms no forbidden tokens; HTML title and `<h1>` render as expected via `curl http://localhost:3000/`. **Visual mobile verification at 375px is pending — Claude can't render in a browser, so the developer needs to eyeball layout, tap targets, CTA scroll, and FAQ toggle manually**
+
 ## 2026-04-28 — Supabase server client + /api/health smoke test (with mid-task grants fix)
 
 - Installed `@supabase/supabase-js` 2.104.1 as a runtime dependency

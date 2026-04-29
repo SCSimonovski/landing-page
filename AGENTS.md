@@ -197,8 +197,8 @@ See `docs/CHANGELOG.md`.
 
 ### Next immediate task
 
-Build the landing page skeleton (HTML structure, basic styles, placeholder content) per `03_Build_Plan.md` Week 1 § Bootstrap. Replace the create-next-app boilerplate at `src/app/page.tsx` with a single-page layout matching the structure in `02_Technical_Reference.md` Part 2.2 (above-the-fold hero, below-the-fold trust block, form placeholder). No real form logic yet — that's the Week 2 task. Mobile-first per Part 2.4.
+Build the multi-step lead form as a client component and the `/api/leads` route per `03_Build_Plan.md` Week 2 § Form + API and `02_Technical_Reference.md` Parts 3.1–3.6. **This is the compliance-load-bearing task** — TCPA consent snapshot captured per submission as immutable text in `consent_log`, honeypot field, sub-3-second submission-time check, IP rate limit (3/hour), Zod validation, transactional inserts into `leads` + `consent_log` + `lead_events`, fire-and-forget notification dispatch (Twilio/Resend/Meta CAPI come in their own follow-on tasks). Drops into the `<section id="lead-form">` placeholder already present in `src/app/page.tsx`.
 
-After the skeleton: form + `/api/leads` (Week 2 — the compliance-load-bearing task). The `mpl-prod` Supabase project + baseline migration is a separate task deferred until launch is imminent (free-tier projects pause after 7 days of inactivity).
+Concurrently or after: replace placeholder copy from the skeleton (H1 marker, FAQ answers, social proof, footer disclaimers) with reviewed final copy; ship `/privacy` and `/terms` pages so the footer links resolve. The `mpl-prod` Supabase project + baseline migration is a separate task deferred until launch is imminent (free-tier projects pause after 7 days of inactivity).
 
 > **Convention:** § 9 holds only the next immediate task. Completed items move to `docs/CHANGELOG.md`.
