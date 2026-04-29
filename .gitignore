@@ -41,6 +41,9 @@ yarn-error.log*
 .idea/
 .vscode/
 
+# Claude Code session-local config
+.claude/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
