@@ -4,6 +4,59 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-04-29 — Multi-step lead form + /api/leads (compliance-load-bearing)
+
+Ships the form (client component) and the server route that captures TCPA-consented leads end-to-end. Drops into the `<section id="lead-form">` placeholder from the prior skeleton.
+
+**Schema (two new migrations, applied to `mpl-dev`):**
+- `20260429114548_add_leads_intake_support.sql` — adds `'duplicate_attempt'` to the `lead_event_type` enum (used by the 30-day phone dedup audit row); adds `on_dnc boolean not null default false` to `leads` (informational flag set at insert time)
+- `20260429114549_lead_insert_function.sql` — defines `insert_lead_with_consent(jsonb) returns uuid`, a SECURITY INVOKER PL/pgSQL function that performs the three-table insert atomically (`leads` + `consent_log` + `lead_events('created')`); grants EXECUTE to `service_role`
+
+**New runtime deps:** `react-hook-form` ^7.74, `@hookform/resolvers` ^5.2, `zod` ^4.3, `libphonenumber-js` ^1.12, `@upstash/ratelimit` ^2.0, `@upstash/redis` ^1.37. Upstash Redis (free tier) prereq added — env: `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`.
+
+**New code:**
+- `src/lib/consent.ts` — `FORM_VERSION = "v1-draft"` + `CONSENT_TEXT` lifted verbatim from `01_Strategy_and_Offer.md` Part 4.3 (with `[BRAND NAME]` and `[opt-out email]` markers for the LLC formation moment)
+- `src/lib/intent.ts` — pure `computeIntentScore` + `computeTemperature` per Part 3.7
+- `src/lib/phone.ts` — server-side strict E.164 normalization via libphonenumber-js (US-only)
+- `src/lib/rate-limit.ts` — Upstash sliding window, 3 / IP / hour, server-only
+- `src/lib/validation/lead-schema.ts` — single Zod schema used by both client form (via `zodResolver`) and server route. Includes 50-state + DC enum
+- `src/lib/db/leads.ts` — `insertLeadWithConsent`, `isSuppressed`, `isOnDNC`, `findRecentDuplicate`, `recordDuplicateAttempt`, all server-only
+- `src/app/api/leads/route.ts` — POST handler, 12-step orchestration: rate limit → Zod → bot path (honeypot + sub-3s) → phone normalize → suppressions → DNC flag → 30-day dedup → score → atomic RPC. Returns generic `{"ok":true,"id":...}` or `{"ok":false}`. Notification dispatch (Twilio/Resend/Meta) is a TODO marker for the next plan
+- `src/components/lead-form.tsx` — `"use client"` multi-step form (6 steps), RHF + zodResolver, off-screen honeypot, stable `form_loaded_at`, in-place success state, off-ramp screen for homeowner=No
+
+**Compliance — what we did:**
+- Consent captured per submission as an immutable snapshot in `consent_log` via the same DB transaction that creates the `leads` row (atomicity guaranteed by `insert_lead_with_consent`). Server uses its own `CONSENT_TEXT` constant; client-sent `consent_text` is ignored even if present (verified: a `"GOTCHA"` payload was discarded; the row contains the literal current text)
+- Consent checkbox is unchecked by default — `consent` field is omitted from RHF defaults so the rendered checkbox is unchecked
+- Honeypot accepts non-empty values (does NOT 400 at the schema layer, which would tip off bots) and silently 200s with a sentinel id at the route layer
+- 3-second timing check on `form_loaded_at`; **known limitation**: relies on client clock, see plan tradeoffs
+- IP rate limit 3 / hour via Upstash sliding window
+- 30-day phone dedup is application-only (the playbook's partial unique index doesn't compile because `now()` is STABLE — see § 6). Dedup audit row goes in `lead_events` as `duplicate_attempt`, leaving `consent_log` unpolluted
+- `on_dnc` column is a debugging breadcrumb, NOT the authoritative gate — the agent dispatcher (next plan) MUST re-query `dnc_registry` at dispatch time
+- Service-role-only writes; `import "server-only"` on `supabase-server`, `rate-limit`, and `db/leads`
+- Catch-block log line is correlation-id + error-code only — no PII
+- Anon writes still blocked at the grants layer (the `/rest/v1/leads` denial test from a prior task remains the proof)
+
+**Compliance — what we haven't done (launch-blocker checklist, per architect):**
+- **Real attorney-reviewed consent text.** Currently `[PLACEHOLDER — pending attorney review]` per the playbook Part 4.3 template. `FORM_VERSION` bumps from `v1-draft` to `v1` at attorney sign-off
+- **Email MX lookup + disposable-email blocklist.** Part 3.2 calls for both; we ship format-only validation
+- **Names "obvious garbage" heuristic.** Part 3.2 calls for it; we ship Zod min/max length only
+- These three are launch checklist items, NOT routine validation hardening
+
+**Verification (live against `mpl-dev`):**
+- Migration diagnostics: `service_role` has `EXECUTE` on `insert_lead_with_consent`; `leads.on_dnc` is `boolean NOT NULL default false`; `lead_event_type` enum includes `duplicate_attempt`
+- Build: `pnpm lint` clean (one React Compiler warning on RHF `watch` — known incompatibility, not a real issue); `pnpm build` clean; `/` stays `○ Static`, `/api/leads` is `ƒ Dynamic`
+- Live POST → HTTP 200 with new uuid; `leads`, `consent_log`, `lead_events` all show one row with the SAME `created_at` timestamp (atomicity proof). Lead computed `intent_score=80, temperature=hot`. Phone normalized to `+14155552671`. `consent_text` length 678 (full text snapshot)
+- Bot honeypot: HTTP 200 + sentinel id, no insert
+- Bot sub-3s: HTTP 200 + sentinel id, no insert
+- Rate limit: 3 submissions succeed from one IP, 4th returns HTTP 429
+- Suppressions: insert into `suppressions`, then submit with that phone → HTTP 200 + sentinel id, no insert; suppression cleaned up
+- 30-day dedup: resubmit with same phone → HTTP 200 with the **existing** lead id; `leads` count stays at 1; `consent_log` count stays at 1; `lead_events` gains a `duplicate_attempt` row with `{source: "form_resubmit", attempted_state: "..."}`
+- Consent server-controlled: client sent `consent_text: "GOTCHA"`, DB row has the real `CONSENT_TEXT`
+- Paranoid grep: `SUPABASE_SERVICE_ROLE_KEY`, `UPSTASH_REDIS_REST_TOKEN`, `HEALTH_CHECK_SECRET` (names) and the value prefixes (silently checked, not echoed) all absent from `.next/static/`
+- **Pending the developer:** visual mobile UI verification at 375px (Claude can't render); see plan verification step 4
+
+**Doc reconciliation pending architect:** `docs/playbook/02_Technical_Reference.md` Part 3.4 still documents the partial unique index `leads_phone_recent_uniq` that we explicitly dropped from the baseline migration (the `now()`-in-partial-index issue). The schema in the doc and the schema in the database are now divergent. Per the working agreement, flagging back to the architect for a one-line edit (remove the index from the Part 3.4 schema block, add a one-line note that 30-day dedup happens in `/api/leads` per `AGENTS.md` § 6).
+
 ## 2026-04-29 — Landing page skeleton
 
 - Replaced the create-next-app boilerplate at `src/app/page.tsx` with the Phase 1 landing page skeleton per `02_Technical_Reference.md` Part 2.2: hero (`<h1>` + sub + CTA + trust bar), how-it-works (3 numbered steps), `<section id="lead-form">` form placeholder for the Week 2 task to drop into, social proof placeholder, FAQ (5 `<details>` Q&As, native expand/collapse, no JS), footer with `/privacy` + `/terms` links, contact, and California Privacy Notice marker

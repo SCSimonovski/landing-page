@@ -1,3 +1,5 @@
+import { LeadForm } from "@/components/lead-form";
+
 export default function Home() {
   return (
     <>
@@ -87,10 +89,8 @@ export default function Home() {
             >
               Get started
             </h2>
-            <div className="mt-8 rounded-lg border border-dashed border-border p-10 text-center text-muted">
-              <p className="text-base">
-                Form coming in the Week 2 task (form + /api/leads).
-              </p>
+            <div className="mt-8">
+              <LeadForm />
             </div>
           </div>
         </section>

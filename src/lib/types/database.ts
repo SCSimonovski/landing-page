@@ -149,6 +149,7 @@ export type Database = {
           last_name: string
           mortgage_balance: number
           notes: string | null
+          on_dnc: boolean
           outcome: string | null
           phone_e164: string
           policy_value: number | null
@@ -179,6 +180,7 @@ export type Database = {
           last_name: string
           mortgage_balance: number
           notes?: string | null
+          on_dnc?: boolean
           outcome?: string | null
           phone_e164: string
           policy_value?: number | null
@@ -209,6 +211,7 @@ export type Database = {
           last_name?: string
           mortgage_balance?: number
           notes?: string | null
+          on_dnc?: boolean
           outcome?: string | null
           phone_e164?: string
           policy_value?: number | null
@@ -259,7 +262,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      insert_lead_with_consent: { Args: { payload: Json }; Returns: string }
     }
     Enums: {
       lead_event_type:
@@ -270,6 +273,7 @@ export type Database = {
         | "status_change"
         | "note_added"
         | "refund_requested"
+        | "duplicate_attempt"
       lead_status:
         | "new"
         | "contacted"
@@ -414,6 +418,7 @@ export const Constants = {
         "status_change",
         "note_added",
         "refund_requested",
+        "duplicate_attempt",
       ],
       lead_status: [
         "new",
