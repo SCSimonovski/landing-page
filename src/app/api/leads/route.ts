@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { LeadFormSchema, type LeadFormInput } from "@/lib/validation/lead-schema";
 import { CONSENT_TEXT, FORM_VERSION } from "@/lib/consent";
 import { computeIntentScore, computeTemperature } from "@/lib/intent";
@@ -12,6 +12,7 @@ import {
   recordDuplicateAttempt,
   type LeadInsertInput,
 } from "@/lib/db/leads";
+import { sendAgentSMS } from "@/lib/sms/dispatch";
 
 export const dynamic = "force-dynamic";
 
@@ -133,12 +134,16 @@ export async function POST(req: Request) {
 
     const id = await insertLeadWithConsent(insertInput);
 
-    // 11. TODO (next plan, paired with STOP webhook): fire-and-forget
-    //     notification dispatch. AGENTS.md § 6 forbids outbound SMS until
-    //     STOP works end-to-end. Shape:
-    //       sendAgentSMS(id).catch((e) => console.error(`[/api/leads] sms ${id} ${e?.code}`));
-    //       sendWelcomeEmail(id).catch(...);
-    //       sendMetaCAPI(id, ip, ua, req).catch(...);
+    // 11. Fire-and-forget notification dispatch via Next 16 `after()`.
+    //     Runs after the response is sent, so it does NOT add to the
+    //     /api/leads response time. Vercel keeps the function alive up to
+    //     `maxDuration` for after() callbacks. Errors are caught inside
+    //     sendAgentSMS — they never surface to the user.
+    //     STOP webhook (/api/twilio/incoming) is wired in this same plan;
+    //     Resend welcome email and Meta CAPI ship in their own plans.
+    after(async () => {
+      await sendAgentSMS(id);
+    });
 
     // 12. Return success with the new lead id only — no PII echoed back.
     return NextResponse.json({ ok: true, id }, { status: 200 });

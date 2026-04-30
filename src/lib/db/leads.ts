@@ -1,6 +1,8 @@
 import "server-only";
 import { createServiceRoleClient } from "@/lib/db/supabase-server";
-import type { Json } from "@/lib/types/database";
+import type { Database, Json } from "@/lib/types/database";
+
+type LeadRow = Database["public"]["Tables"]["leads"]["Row"];
 
 // Strongly-typed input for the insert_lead_with_consent RPC. The function
 // signature in the migration takes a single jsonb payload; this type is the
@@ -106,6 +108,51 @@ export async function recordDuplicateAttempt(
     lead_id: existingLeadId,
     event_type: "duplicate_attempt",
     event_data: attemptData,
+  });
+  if (error) throw error;
+}
+
+// Fetch a lead by id. Used by the dispatcher to load the full row before
+// formatting the agent SMS. Returns null if not found.
+export async function getLeadById(id: string): Promise<LeadRow | null> {
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+// Audit row for a successful agent SMS dispatch. Twilio SID lets us
+// cross-reference with Twilio's own message log if needed.
+export async function recordSmsSent(
+  leadId: string,
+  sid: string,
+): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from("lead_events").insert({
+    lead_id: leadId,
+    event_type: "sms_sent",
+    event_data: { sid },
+  });
+  if (error) throw error;
+}
+
+// Audit row for a skipped dispatch. Two reason values map to two enum
+// values added in the add_sms_skip_event_types migration.
+export async function recordSmsSkipped(
+  leadId: string,
+  reason: "dnc" | "suppression",
+): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const eventType =
+    reason === "dnc" ? "sms_skipped_dnc" : "sms_skipped_suppression";
+  const { error } = await supabase.from("lead_events").insert({
+    lead_id: leadId,
+    event_type: eventType,
+    event_data: { skipped_at: new Date().toISOString() },
   });
   if (error) throw error;
 }

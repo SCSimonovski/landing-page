@@ -4,6 +4,59 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-04-30 — Twilio agent SMS dispatch + STOP webhook (paired)
+
+Ships the agent SMS dispatcher and the inbound STOP webhook together — per `AGENTS.md` § 6, no outbound SMS goes out until STOP works end-to-end. Both pieces verified by execution; the live carrier-delivery loop closes when A2P 10DLC paperwork lands (see launch checklist below).
+
+**Schema (one new migration, applied to `mpl-dev`):**
+- `20260430003418_add_sms_skip_event_types.sql` — adds `sms_skipped_dnc` and `sms_skipped_suppression` to `lead_event_type`. Skips get a queryable audit row, not just a console log — refund disputes and compliance audits months later need the answer to "did we attempt dispatch for this lead?" Vercel logs rotate; `lead_events` is forever.
+
+**New runtime deps:** `twilio` ^6.0, `server-only` ^0.0.1 (npm package needed for `tsx` to no-op the `import "server-only"` guards via `--conditions=react-server` when running scripts outside the Next bundler).
+
+**New code:**
+- `src/lib/twilio/client.ts` — server-only `getTwilioClient()` factory (cached per process)
+- `src/lib/twilio/messages.ts` — `formatAgentSMS(lead)` per playbook 5.3 + STOP keyword set (matches Twilio's auto-opt-out defaults plus REVOKE — see asymmetry below)
+- `src/lib/twilio/verify-signature.ts` — wraps Twilio SDK's `validateRequest`. Reconstructs the URL from `x-forwarded-host` + `x-forwarded-proto` (safe on Vercel and ngrok; revisit if we ever sit behind an untrusted proxy chain)
+- `src/lib/sms/dispatch.ts` — `sendAgentSMS(leadId)` orchestrating: getLeadById → DNC re-query → suppressions re-query → format → twilio.messages.create → recordSmsSent. Catches all errors with no PII.
+- `src/lib/db/suppressions.ts` — `addSuppression(...)` with code-level idempotency (pre-check on `phone_e164`; no DB unique constraint, follows the `findRecentDuplicate` precedent).
+- `src/lib/db/leads.ts` — added `getLeadById`, `recordSmsSent`, `recordSmsSkipped` helpers
+- `src/app/api/twilio/incoming/route.ts` — POST handler: signature verify → form parse → STOP keyword check → addSuppression → empty TwiML response. 403 on bad signature so Twilio backs off rather than retrying forever.
+- `src/app/api/leads/route.ts` — wired dispatch via `after(() => sendAgentSMS(id))` from `next/server`. The `dup` (duplicate-phone) branch deliberately does NOT dispatch — the original lead was already notified.
+- `scripts/test-dispatch-suppression.ts` — one-off verification script that bypasses `/api/leads` to exercise the dispatch-stage suppression skip path. Repo-tracked for future race-path tests. Run via `set -a; source .env.local; set +a; NODE_OPTIONS='--conditions=react-server' pnpm dlx tsx scripts/test-dispatch-suppression.ts`.
+
+**Compliance — what we did:**
+- **DNC re-query at dispatch time, in code.** The rule from the prior task ("on_dnc column is informational; the dispatcher must re-query") is now actually enforced. `sendAgentSMS` calls `isOnDNC(lead.phone_e164)` live before sending; on hit, writes `sms_skipped_dnc` and returns.
+- **Suppressions re-query at dispatch time, in code.** Same defense for the rare race where a lead's phone gets suppressed between intake and dispatch (e.g., they STOP a different campaign in the gap).
+- **`after()` from `next/server`, not `await`, so dispatch never blocks speed-to-lead.** `/api/leads` HTTP response time stays sub-500ms; SMS dispatch runs in the background and is independently bounded by `maxDuration`.
+- **Twilio webhook signature verification mandatory.** Bad signature → HTTP 403, no DB write. Verified by curl with both valid (real HMAC-SHA1 over the Twilio params) and invalid signatures — see verification packet below.
+- **No PII in logs.** Dispatch logs `[dispatch] lead=<id> sent sid=<sid>` or `[dispatch] lead=<id> skip=<reason>`. STOP webhook logs `[twilio/incoming] suppressed ...<last4>` (last 4 digits only, debugging-useful but not full PII).
+
+**Compliance — REVOKE asymmetry (intentional, documented here):**
+Our STOP keyword set includes `STOP/STOPALL/UNSUBSCRIBE/CANCEL/END/QUIT/HALT/REVOKE`. The first seven match Twilio's auto-opt-out defaults — Twilio blocks future sends to that number from this Twilio number, AND we add the row to `suppressions` for our own dispatch-time check. **REVOKE is broader than Twilio's default**: a user texting REVOKE lands in our `suppressions` (so our dispatch check stops future sends from any of our Twilio numbers, current or future) but Twilio's per-number auto-opt-out does NOT fire on REVOKE. Operationally fine because our dispatch check is the canonical gate; documented so future-us notices.
+
+**Compliance — A2P 10DLC delivery wall (this changes the trial-account assumption):**
+Trial accounts can no longer deliver SMS to US destinations without **A2P 10DLC** registration (long-codes, error 30034) or **TFV** (toll-free numbers, error 30032). Both verifications need an EIN (LLC formation gate per § 8). What this means in practice:
+- Code is correct end-to-end. Twilio API returns success and a real SID for every dispatch.
+- The `lead_events.sms_sent` row gets inserted as expected.
+- The Twilio Message Logs show `status=undelivered` because the carrier rejected delivery.
+- Until A2P 10DLC lands, **no SMS actually arrives at the agent's phone**. The "fire dispatch on every lead" wiring works; only the carrier-layer delivery is blocked.
+- This is paperwork-blocked, not code-blocked. Prior plan tradeoff "Twilio trial works for full development" was wrong for outbound delivery as of late 2023; corrected here.
+
+**Compliance — what we did NOT close:**
+- Live STOP webhook with real Twilio → real public URL → our endpoint. We curl-simulated the webhook with a real Twilio-format signature, which proves our route logic. The remaining bit (Twilio actually hitting our public URL via DNS) gets verified post-Vercel-deploy. ngrok would have closed this gap during dev; the developer couldn't install it, so we accepted the gap with the Vercel-deploy backstop.
+- SMS watchdog — Twilio API failure on dispatch is logged once and silently dropped. Phase 1 volume makes this acceptable; on the launch checklist (per playbook 4.5).
+
+**Verification packet:**
+- `pnpm lint` clean (one pre-existing RHF/React-Compiler warning, not new)
+- `pnpm build` clean. Routes: `/` → `○ Static`, `/api/health` + `/api/leads` + **`/api/twilio/incoming`** → `ƒ Dynamic`
+- Migration diagnostic: `lead_event_type` enum now includes `sms_skipped_dnc` and `sms_skipped_suppression`; types regenerated
+- Paranoid grep on `.next/static/`: `TWILIO_AUTH_TOKEN`, `TWILIO_ACCOUNT_SID`, `TWILIO_FROM_NUMBER`, `AGENT_PHONE_NUMBER` (names) absent; 24-char value prefixes for token/SID and full phone-number values absent (silently checked, not echoed)
+- **Dispatch-suppression script PASS (3 assertions):** no Twilio API call; `sms_skipped_suppression` event recorded; NO `sms_sent` event recorded. Closes the race-path verification.
+- **Live dispatch round-trip:** form-submitted lead resulted in `lead_events.sms_sent` row with a real Twilio SID (`SMc99...`); Twilio Message Logs confirm dispatch was attempted and carrier-rejected with the expected A2P 10DLC error code.
+- **Webhook signature (curl-simulated):** valid signature → HTTP 200 + suppressions row inserted with the test phone; invalid signature → HTTP 403 "forbidden", no row. Test rows cleaned up.
+
+**Test data left in `mpl-dev`:** none from this task — all cleanups ran.
+
 ## 2026-04-29 — Multi-step lead form + /api/leads (compliance-load-bearing)
 
 Ships the form (client component) and the server route that captures TCPA-consented leads end-to-end. Drops into the `<section id="lead-form">` placeholder from the prior skeleton.

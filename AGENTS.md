@@ -197,8 +197,16 @@ See `docs/CHANGELOG.md`.
 
 ### Next immediate task
 
-Twilio agent SMS dispatch + STOP webhook, **paired**. Per § 6: STOP handling must work end-to-end before any outbound SMS goes out. The two pieces ship together so that the moment we send the first SMS, opt-out is wired up. Dispatch hooks into the `// TODO Twilio/Resend/CAPI` marker in `src/app/api/leads/route.ts` (fire-and-forget after the response is queued, so it never blocks speed-to-lead). The agent dispatcher MUST re-query `dnc_registry` at dispatch time — never rely on `leads.on_dnc` (the column is a snapshot from insert time; the DNC list updates daily). Prereqs: Twilio account + A2P 10DLC registration (multi-week lead time, blocks on LLC + EIN per § 8) + purchased US long-code or toll-free number + `TWILIO_*` and `AGENT_PHONE_NUMBER` env vars wired.
+Resend welcome email — second of the three notifications (Twilio dispatch + STOP shipped in the prior task). Same fire-and-forget pattern via `after()` from `src/app/api/leads/route.ts`. Prereqs: Resend free-tier account; for dev, send from `onboarding@resend.dev` (their verified test sender, no domain needed); for prod, verify a domain. Add `RESEND_API_KEY` + `FROM_EMAIL` env vars (already in `.env.example`).
 
-After Twilio: Resend welcome email; Meta CAPI Lead event; daily DNC scrub cron; `/privacy` and `/terms` pages (footer links + consent-text references both 404 until then); replace placeholder copy from the skeleton + draft consent text with attorney-reviewed final versions. The `mpl-prod` Supabase project + baseline migration is a separate task deferred until launch is imminent (free-tier projects pause after 7 days of inactivity).
+After Resend: Meta CAPI Lead event; daily DNC scrub cron; `/privacy` and `/terms` pages (footer links + consent-text references both 404 until then); replace placeholder copy from the skeleton + draft consent text with attorney-reviewed final versions. The `mpl-prod` Supabase project + baseline migration is a separate task deferred until launch is imminent (free-tier projects pause after 7 days of inactivity).
+
+**Outstanding launch checklist (paperwork-blocked, NOT routine follow-ups):**
+- Real attorney-reviewed consent text (replaces the v1-draft from playbook 4.3)
+- Twilio A2P 10DLC registration — needs LLC + EIN. Until done, outbound SMS is silently dropped at the carrier (Twilio API returns success; messages show `status=undelivered` with carrier error 30034 for long-codes / 30032 for toll-free TFV). Code is right; delivery is paperwork-blocked.
+- Email MX lookup + disposable-email blocklist (form validation hardening per playbook 3.2)
+- Names "obvious garbage" heuristic (form validation hardening per playbook 3.2)
+- SMS watchdog cron (per playbook 4.5 — silent dispatch failures get logged once and dropped today)
+- LLC + EIN (gates the above)
 
 > **Convention:** § 9 holds only the next immediate task. Completed items move to `docs/CHANGELOG.md`.
