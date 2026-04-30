@@ -4,6 +4,58 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-04-30 — Vercel hobby deploy (public-URL dev environment, NOT launch)
+
+Ships the app to a public URL: `https://northgateprotection.vercel.app`. Closes the ngrok-blocked Phase-1 gap that has been parking the live STOP webhook test, gives Meta a real URL to verify the eventual Pixel install against, and validates the speed-to-lead network-RTT prediction (Vercel us-east → Supabase us-east replaces the dev-from-Macedonia path). Project name was renamed from the auto-generated `landing-page-blush-chi-49` to `northgateprotection` mid-task; both the Vercel domain and `NEXT_PUBLIC_SITE_URL` were updated, then redeployed.
+
+**Explicitly NOT launch.** Vercel's production env points at `mpl-dev` (the only Supabase project we have); custom domain is deferred (gates on LLC + brand); no `mpl-prod` (free-tier projects pause after 7 days idle, not worth keeping warm pre-launch); no preview-deploy environments yet. Real launch requires `mpl-prod` + LLC + EIN + A2P 10DLC + attorney-reviewed text + custom domain — none of those happen here.
+
+**No schema changes, no new deps.**
+
+**New files:**
+- `vercel.json` — region pinned to `iad1` (US East) to co-locate with Supabase + Upstash; explicit `maxDuration: 10` on `/api/leads`. Co-location is **load-bearing for the entire speed-to-lead story** — without the region pin, Vercel routes to whichever edge is closest to the user's geo, adding variable RTT to every Supabase + Upstash call. Verify after any infrastructure change. The explicit `maxDuration` makes the after()-deadline visible in code review rather than relying on Vercel hobby's implicit default.
+
+**Modified:**
+- `src/lib/rate-limit.ts` — split into two named limiters with separate Redis prefixes (`leads-api` and `health-api`) so a `/api/leads` burst doesn't lock out `/api/health` probes from the same IP and vice versa. Reuses the same Upstash project. Added `checkHealthRateLimit(ip)` helper, lenient cap (10/IP/hour) appropriate for legitimate uptime monitors that poll on a schedule but cuts off bots probing the endpoint brute-force-style.
+- `src/app/api/health/route.ts` — rate-limit check fires BEFORE the `x-health-secret` header gate. Reasoning: by the time an attacker has gotten past the rate limit, they've already received 10 `404`s confirming the route exists, so hiding behind 404 vs 429 buys nothing. Returns `429` after the limit, `404` for missing/wrong header, `200` `{ok:true}` on success, `503` `{ok:false}` on DB failure.
+
+**Vercel env-var configuration (production environment):**
+- All `.env.local` values mirrored to Vercel **except**:
+  - `SUPABASE_DB_PASSWORD` — CLI-only, never needed at runtime; not set on Vercel.
+  - `HEALTH_CHECK_SECRET` — **rotated fresh** for production (NOT a copy of dev's). Reasoning: dev secret has been visible in chat session logs more than once during testing; reusing it on a public endpoint where anyone can probe gives meaningful attack surface to anyone with chat-log access. Standard secret-rotation hygiene on environment promotion.
+  - `NEXT_PUBLIC_SITE_URL` — set to `https://northgateprotection.vercel.app` (different from `.env.local`'s `http://localhost:3000`). Affects the welcome email body's privacy link.
+  - `META_PIXEL_ID`, `META_CAPI_ACCESS_TOKEN`, `META_TEST_EVENT_CODE` — skipped (Meta integration is the next task; vars get set when Pixel ships).
+- Both Production AND Preview environments selected for all vars. Acceptable for the public-URL-dev phase: we have no PR-based preview workflow, and even if a preview fires it'd hit the same `mpl-dev` / Twilio trial / Resend / Upstash. Re-scope when `mpl-prod` exists and previews need isolation.
+- Auto-deploy on push to `main` is enabled (Vercel default). Matches the continuous-integration model; deploy gates can be added later if needed.
+
+**Twilio webhook reconfiguration:**
+- "A MESSAGE COMES IN" webhook URL on the trial number changed from the unreachable dev `localhost` URL to `https://northgateprotection.vercel.app/api/twilio/incoming` (POST). Signature verification works the same on Vercel because `verify-signature.ts` reconstructs the URL from `x-forwarded-host` + `x-forwarded-proto`, both of which Vercel's edge sets correctly.
+
+**Compliance — what we did:**
+- **Rate-limit hardening on `/api/health`** before exposing it to the public internet (per architect review). New 10/IP/hour limiter with its own Redis prefix; doesn't share the bucket with `/api/leads`. Probing the endpoint costs an attacker rate-limit budget; hitting the limit returns 429.
+- **`HEALTH_CHECK_SECRET` rotated on environment promotion.** Dev keeps its old value; production gets a fresh one. Standard hygiene for any secret that's been visible in dev logs.
+- **CT-log discoverability acknowledged operationally.** Every `*.vercel.app` cert lands in the public Certificate Transparency log within minutes of issuance, so the deploy URL is discoverable from day one regardless of marketing. Rate limits are the per-IP defense; bots rotating IPs will still get some submissions through. mpl-dev getting dropped before launch handles the data-pollution side; weekly junk-volume monitoring is the operational defense (added to launch checklist + flagged for Ops Runbook).
+- **Region co-location preserved.** Vercel functions pinned to `iad1`, Supabase project is `us-east-1`, Upstash bucket is `us-east-1`. Same continent, same coast. Verify after any infrastructure change — this is the speed-to-lead story.
+- **Secret-handling discipline established.** Per architect review: developer keeps `HEALTH_CHECK_SECRET` locally, never echoed in chat. Curl commands written as templates with `<your-secret>` placeholders for the dev to fill in. We've had two prior near-misses where "low-stakes" secrets got pasted into chat (Upstash dashboard, ngrok authtoken) and the answer each time was "rotate it" — the rule now is cleaner: secrets stay with the developer.
+
+**Compliance — flagged for ongoing awareness:**
+- **`mpl-dev` is the database for everything submitted via the Vercel URL.** Every form submission from `northgateprotection.vercel.app` writes to `mpl-dev`. This is the "public-URL dev environment" posture — fine for now, dropped before `mpl-prod` cutover. Any junk lead rows in `mpl-dev` from CT-log scanners are expected and will be cleaned up at cutover.
+- **CT-log scanners will find the URL.** Operational expectation, not a fixable thing in this phase. Placeholder `/privacy` + `/terms` content remains publicly accessible until attorney review lands; don't share the URL more broadly than necessary while drafts are live.
+- **Twilio dispatches still A2P-blocked at the carrier.** Code path works (Twilio API returns success); messages show `status=undelivered` with the carrier's A2P 10DLC error. Same paperwork-blocked state as dev.
+- **Resend emails actually deliver from the Vercel deploy.** `onboarding@resend.dev` is verified at Resend; test submissions on Vercel will send real emails to whatever address is submitted. Same as dev.
+- **Welcome email body URLs now point at `https://northgateprotection.vercel.app/privacy`** instead of localhost. Correct behavior for the deployed environment, just worth knowing — links in emails to real recipients now work.
+- **Ops Runbook addition for architect to propose:** weekly check on `mpl-dev` junk lead volume during the public-URL-dev phase. Threshold for revisiting CAPTCHA: ~50 junk submissions/week. Phase 1 plan deferred CAPTCHA based on a "not exposed publicly" assumption that no longer holds. Tracked in `AGENTS.md` § 9 launch checklist until the runbook entry lands in `docs/playbook/04_Operations_Runbook.md`.
+
+**Verification packet:**
+- `pnpm lint` clean (one pre-existing RHF/React-Compiler warning, not new).
+- `pnpm build` clean. Route table includes `/`, `/_not-found`, `/privacy`, `/terms`, `/api/health`, `/api/leads`, `/api/twilio/incoming`.
+- All public pages on Vercel return HTTP 200: `/`, `/privacy`, `/terms` (verified with curl against the renamed domain).
+- `/api/health` with valid `x-health-secret` header → 200 `{"ok":true}`; without header → 404; 11+ rapid hits from same IP → 429 (rate-limit fires as intended).
+- **Live form submission round-trip via Vercel URL:** form submitted, `/api/leads` returned 200, welcome email arrived at the developer's gmail with the correct production URL in the body (`Privacy policy: https://northgateprotection.vercel.app/privacy`). Link clicks load the deployed page.
+- **Speed-to-lead on Vercel:** measurement attempted with 3 timed POSTs from the dev box; first two showed the predicted sub-500ms response (down from the dev-mode ~850ms Macedonia → us-east floor), confirming the iad1 co-location prediction. **Third attempt fired the rate-limit (429)** — surfaced explicitly per architect's "pause on weird-but-passing" protocol. Cause is correct production behavior, not a bug: Vercel prepends the real client IP to `x-forwarded-for`, so spoofed-IP load tests from one dev box all share the same per-IP bucket. Note: spoofing IP headers won't work for load testing on Vercel; use distributed runners or temporarily widen the limit when a real load-test session is needed.
+- **Live STOP webhook end-to-end test deferred** — Vercel deploy + Twilio webhook reconfiguration completed the infrastructure side; the test itself moves to the next session when verified phone access is available. Tracked in `AGENTS.md` § 9 launch checklist as the now-unblocked-but-pending item.
+- **Paranoid view-source on the deployed bundle:** downloaded all 10 JS chunks served from `northgateprotection.vercel.app` (~968KB total) and grepped for env-var name leaks (`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_PASSWORD`, `TWILIO_AUTH_TOKEN`, `TWILIO_ACCOUNT_SID`, `RESEND_API_KEY`, `HEALTH_CHECK_SECRET`, `UPSTASH_REDIS_REST_TOKEN`, `UPSTASH_REDIS_REST_URL`, `META_CAPI_ACCESS_TOKEN`), JWT-shape strings (`eyJ...`), Twilio SID prefixes (`AC...`), Resend key prefixes (`re_...`), generic secret prefixes (`sk_...`), and `process.env` literals. **All searches: zero matches.** No JWTs even though the Supabase anon key is one — confirms no browser-side Supabase client is instantiated (all DB writes go through `/api/leads` server-side). Clean bundle.
+
 ## 2026-04-30 — /privacy + /terms pages (placeholder, attorney review pending)
 
 Closes the dangling references that have been on the launch checklist since the form/api task. Every row in `consent_log` captures a `consent_text` that mentions "Privacy Policy" and "Terms" — pages that previously 404'd. Now they resolve, and the form's consent step + welcome email body link to them.
