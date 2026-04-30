@@ -197,7 +197,20 @@ export function LeadForm() {
       {/* form_loaded_at carried in form state; registered as hidden number. */}
       <input type="hidden" {...register("form_loaded_at", { valueAsNumber: true })} />
 
-      <p className="text-sm text-muted text-right" aria-live="polite">
+      <div
+        className="h-1 w-full overflow-hidden rounded-full bg-border"
+        role="progressbar"
+        aria-valuemin={1}
+        aria-valuemax={TOTAL_STEPS}
+        aria-valuenow={step + 1}
+        aria-label={`Step ${step + 1} of ${TOTAL_STEPS}`}
+      >
+        <div
+          className="h-full bg-accent transition-[width] duration-300 ease-out"
+          style={{ width: `${((step + 1) / TOTAL_STEPS) * 100}%` }}
+        />
+      </div>
+      <p className="mt-2 text-sm text-muted text-right" aria-live="polite">
         Step {step + 1} of {TOTAL_STEPS}
       </p>
 
@@ -477,7 +490,7 @@ export function LeadForm() {
           <button
             type="button"
             onClick={back}
-            className="min-h-11 px-5 rounded-md border border-border text-base font-medium text-foreground hover:bg-gray-50"
+            className="min-h-11 px-5 rounded-md border border-border text-base font-medium text-foreground hover:bg-[#E6DCC4]"
             disabled={submitState === "submitting"}
           >
             Back
@@ -489,14 +502,14 @@ export function LeadForm() {
           <button
             type="button"
             onClick={next}
-            className="min-h-11 px-6 rounded-md bg-accent text-base font-medium text-white hover:bg-accent-hover"
+            className="min-h-11 px-6 rounded-md bg-accent text-base font-medium text-background hover:bg-accent-hover"
           >
             Next
           </button>
         ) : (
           <button
             type="submit"
-            className="min-h-11 px-6 rounded-md bg-accent text-base font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+            className="min-h-11 px-6 rounded-md bg-accent text-base font-medium text-background hover:bg-accent-hover disabled:opacity-50"
             disabled={submitState === "submitting"}
           >
             {submitState === "submitting" ? "Sending..." : "Get my options"}
@@ -523,8 +536,8 @@ function YesNoButton({
       aria-pressed={selected}
       className={`min-h-11 px-4 rounded-md border text-base font-medium transition-colors ${
         selected
-          ? "bg-accent text-white border-accent"
-          : "bg-white text-foreground border-border hover:bg-gray-50"
+          ? "bg-accent text-background border-accent"
+          : "bg-background text-foreground border-border hover:bg-[#E6DCC4]"
       }`}
     >
       {children}
