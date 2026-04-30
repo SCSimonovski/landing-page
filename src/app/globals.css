@@ -1,27 +1,35 @@
 @import "tailwindcss";
 
 :root {
-  --background: #F2EBDC;
-  --foreground: #102841;
-  --muted: #4A5764;
-  --accent: #102841;
-  --accent-hover: #1B3A5C;
-  --accent-secondary: #7A6A4F;
-  --border: #D8CFB8;
-  --font-serif: Georgia, "Times New Roman", serif;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --background: #EDE8DD;
+  --background-deep: #E2DCCB;
+  --background-card: #F7F3E9;
+  --foreground: #1F2A28;
+  --foreground-soft: #3A4845;
+  --muted: #6E6A5C;
+  --accent: #1F2A28;
+  --accent-hover: #3A4845;
+  --accent-sage: #6B8A7A;
+  --accent-sage-deep: #4F6B5D;
+  --accent-coral: #E27A5F;
+  --border: #CFC6B0;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-background-deep: var(--background-deep);
+  --color-background-card: var(--background-card);
   --color-foreground: var(--foreground);
+  --color-foreground-soft: var(--foreground-soft);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
-  --color-accent-secondary: var(--accent-secondary);
+  --color-accent-sage: var(--accent-sage);
+  --color-accent-sage-deep: var(--accent-sage-deep);
+  --color-accent-coral: var(--accent-coral);
   --color-border: var(--border);
-  --font-sans: var(--font-sans);
-  --font-serif: var(--font-serif);
+  --font-sans: var(--font-geist);
+  --font-serif: var(--font-fraunces);
 }
 
 html {

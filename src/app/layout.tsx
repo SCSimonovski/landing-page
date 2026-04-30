@@ -1,10 +1,24 @@
 import type { Metadata } from "next";
+import { Geist, Fraunces } from "next/font/google";
 import "./globals.css";
+
+const geist = Geist({
+  variable: "--font-geist",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
+  subsets: ["latin"],
+  style: ["italic"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Northgate Protection — Mortgage Protection Quotes",
   description:
-    "A licensed agent in your state will follow up with options that fit your mortgage and your family.",
+    "We connect homeowners with one licensed insurance agent in their state. The agent walks you through coverage that fits your mortgage and your family. You decide.",
 };
 
 export default function RootLayout({
@@ -13,7 +27,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased">
+    <html
+      lang="en"
+      className={`${geist.variable} ${fraunces.variable} h-full antialiased`}
+    >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

@@ -176,7 +176,7 @@ export function LeadForm() {
     <form
       onSubmit={handleSubmit(onSubmit)}
       noValidate
-      className="rounded-lg border border-border p-6 sm:p-8"
+      className="rounded-[20px] border border-border bg-background-card p-6 sm:p-9 shadow-[0_1px_0_rgba(31,42,40,0.04),0_24px_60px_-28px_rgba(31,42,40,0.18)]"
       aria-label="Mortgage protection lead form"
     >
       {/* Hidden bot trap. Off-screen, not focusable, ignored by AT. */}
@@ -197,38 +197,53 @@ export function LeadForm() {
       {/* form_loaded_at carried in form state; registered as hidden number. */}
       <input type="hidden" {...register("form_loaded_at", { valueAsNumber: true })} />
 
+      <p
+        className="mb-5 text-xs font-medium tracking-[0.02em] text-accent-sage-deep"
+        aria-live="polite"
+      >
+        Step {step + 1} / {TOTAL_STEPS}
+      </p>
       <div
-        className="h-1 w-full overflow-hidden rounded-full bg-border"
+        className="flex gap-1.5 mb-7"
         role="progressbar"
         aria-valuemin={1}
         aria-valuemax={TOTAL_STEPS}
         aria-valuenow={step + 1}
         aria-label={`Step ${step + 1} of ${TOTAL_STEPS}`}
       >
-        <div
-          className="h-full bg-accent transition-[width] duration-300 ease-out"
-          style={{ width: `${((step + 1) / TOTAL_STEPS) * 100}%` }}
-        />
+        {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+          <span
+            key={i}
+            className={`flex-1 h-[5px] rounded-full transition-colors ${
+              i <= step ? "bg-accent-sage" : "bg-foreground/10"
+            }`}
+          />
+        ))}
       </div>
-      <p className="mt-2 text-sm text-muted text-right" aria-live="polite">
-        Step {step + 1} of {TOTAL_STEPS}
-      </p>
 
       {/* Step 1: mortgage balance slider */}
       {step === 0 && (
-        <fieldset className="mt-4">
-          <legend className="text-lg font-semibold text-foreground">
-            What&apos;s your remaining mortgage balance?
+        <fieldset>
+          <legend className="text-[22px] sm:text-[26px] font-medium tracking-[-0.015em] leading-[1.2] text-foreground">
+            What&apos;s left on your mortgage?
           </legend>
-          <p className="mt-4 text-2xl font-bold text-accent text-center">
-            {balance != null ? balance.toLocaleString("en-US") : "—"}
+          <p className="mt-1.5 text-[13.5px] leading-[1.5] text-muted">
+            A rough number works — slide to the closest amount.
           </p>
+          <div className="mt-7 rounded-[14px] bg-background py-4 text-center">
+            <p className="font-medium text-[44px] sm:text-[56px] leading-none tracking-[-0.03em] text-foreground">
+              {balance != null ? `$${balance.toLocaleString("en-US")}` : "—"}
+            </p>
+            <p className="mt-1.5 text-[11px] uppercase tracking-[0.04em] text-muted">
+              Estimated balance
+            </p>
+          </div>
           <input
             type="range"
             min={50_000}
             max={1_000_000}
             step={10_000}
-            className="mt-4 w-full"
+            className="mt-5 w-full accent-[var(--accent-sage)]"
             aria-label="Mortgage balance"
             {...register("mortgage_balance", { valueAsNumber: true })}
           />
@@ -317,7 +332,7 @@ export function LeadForm() {
               What state do you live in?
             </legend>
             <select
-              className="mt-3 w-full min-h-11 rounded-md border border-border bg-white px-3 text-base"
+              className="mt-3 w-full min-h-11 rounded-md border border-border bg-background px-3 text-base"
               aria-label="State"
               defaultValue=""
               {...register("state")}
@@ -485,12 +500,12 @@ export function LeadForm() {
         </p>
       )}
 
-      <div className="mt-8 flex items-center justify-between gap-3">
+      <div className="mt-7 flex items-center justify-between gap-3">
         {step > 0 ? (
           <button
             type="button"
             onClick={back}
-            className="min-h-11 px-5 rounded-md border border-border text-base font-medium text-foreground hover:bg-[#E6DCC4]"
+            className="min-h-[52px] px-5 rounded-2xl border border-border text-base font-medium text-foreground hover:bg-background"
             disabled={submitState === "submitting"}
           >
             Back
@@ -502,14 +517,15 @@ export function LeadForm() {
           <button
             type="button"
             onClick={next}
-            className="min-h-11 px-6 rounded-md bg-accent text-base font-medium text-background hover:bg-accent-hover"
+            className="inline-flex min-h-[52px] items-center gap-2 px-7 rounded-2xl bg-accent text-base font-medium text-background-card tracking-[-0.005em] hover:bg-accent-hover"
           >
-            Next
+            Continue
+            <span aria-hidden="true" className="opacity-70">→</span>
           </button>
         ) : (
           <button
             type="submit"
-            className="min-h-11 px-6 rounded-md bg-accent text-base font-medium text-background hover:bg-accent-hover disabled:opacity-50"
+            className="min-h-[52px] px-7 rounded-2xl bg-accent text-base font-medium text-background-card tracking-[-0.005em] hover:bg-accent-hover disabled:opacity-50"
             disabled={submitState === "submitting"}
           >
             {submitState === "submitting" ? "Sending..." : "Get my options"}
@@ -536,8 +552,8 @@ function YesNoButton({
       aria-pressed={selected}
       className={`min-h-11 px-4 rounded-md border text-base font-medium transition-colors ${
         selected
-          ? "bg-accent text-background border-accent"
-          : "bg-background text-foreground border-border hover:bg-[#E6DCC4]"
+          ? "bg-accent text-background-card border-accent"
+          : "bg-background-card text-foreground border-border hover:bg-background"
       }`}
     >
       {children}
