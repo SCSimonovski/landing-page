@@ -13,6 +13,7 @@ import {
   type LeadInsertInput,
 } from "@/lib/db/leads";
 import { sendAgentSMS } from "@/lib/sms/dispatch";
+import { sendWelcomeEmail } from "@/lib/email/welcome";
 
 export const dynamic = "force-dynamic";
 
@@ -137,12 +138,15 @@ export async function POST(req: Request) {
     // 11. Fire-and-forget notification dispatch via Next 16 `after()`.
     //     Runs after the response is sent, so it does NOT add to the
     //     /api/leads response time. Vercel keeps the function alive up to
-    //     `maxDuration` for after() callbacks. Errors are caught inside
-    //     sendAgentSMS — they never surface to the user.
-    //     STOP webhook (/api/twilio/incoming) is wired in this same plan;
-    //     Resend welcome email and Meta CAPI ship in their own plans.
+    //     `maxDuration` for after() callbacks.
+    //     Dispatchers run in PARALLEL (Promise.all) — they're independent;
+    //     serial would extend the SMS path's effective deadline by however
+    //     long Resend takes. Each catches its own errors internally so a
+    //     failure in one doesn't reject the Promise.all.
+    //     Meta CAPI is the third notification, slots into the same
+    //     Promise.all in its plan.
     after(async () => {
-      await sendAgentSMS(id);
+      await Promise.all([sendAgentSMS(id), sendWelcomeEmail(id)]);
     });
 
     // 12. Return success with the new lead id only — no PII echoed back.

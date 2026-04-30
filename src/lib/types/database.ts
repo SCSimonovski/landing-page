@@ -276,6 +276,7 @@ export type Database = {
         | "duplicate_attempt"
         | "sms_skipped_dnc"
         | "sms_skipped_suppression"
+        | "email_skipped_suppression"
       lead_status:
         | "new"
         | "contacted"
@@ -423,6 +424,7 @@ export const Constants = {
         "duplicate_attempt",
         "sms_skipped_dnc",
         "sms_skipped_suppression",
+        "email_skipped_suppression",
       ],
       lead_status: [
         "new",

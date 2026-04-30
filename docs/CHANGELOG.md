@@ -4,6 +4,47 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-04-30 — Resend welcome email (parallel dispatch with Twilio)
+
+Ships the welcome email, the second of three notifications dispatched from `/api/leads`. Plain-text per playbook 4.3, sent in parallel with the agent SMS via `Promise.all` inside the existing `after()` callback so neither dispatcher gates on the other's completion.
+
+**Schema (one new migration, applied to `mpl-dev`):**
+- `20260430110618_add_email_skip_event_type.sql` — adds `'email_skipped_suppression'` to `lead_event_type`. `'email_sent'` was already in the baseline enum (verified via pre-flight `unnest(enum_range(...))` check before drafting the migration). No DNC variant for email — DNC is a phone-only registry.
+
+**New runtime dep:** `resend` ^6.12.
+
+**New code:**
+- `src/lib/resend/client.ts` — server-only `getResendClient()` factory, cached per process (mirrors the Twilio client factory pattern).
+- `src/lib/email/welcome.ts` — welcome email template + `sendWelcomeEmail(leadId)` orchestration: `getLeadById` → suppressions re-query → render template with `{firstName}` substitution → `resend.emails.send` → `recordEmailSent`. Catches all errors with no PII (lead id only).
+- `src/lib/db/leads.ts` — added `recordEmailSent(leadId, resendId)` and `recordEmailSkipped(leadId)` helpers (parallel to the SMS skip helpers). Single skip variant; no DNC equivalent for email.
+- `src/app/api/leads/route.ts` — replaced the single-dispatcher `after()` with `await Promise.all([sendAgentSMS(id), sendWelcomeEmail(id)])`. Parallel because the dispatchers are independent; serial would extend the SMS path's effective deadline by however long Resend takes. Meta CAPI (next plan) slots into the same `Promise.all`.
+
+**Compliance — what we did:**
+- **Plain text email (no HTML)** per playbook 4.3 — higher inbox placement, no rendering surprises, privacy-friendlier (no remote image fetches).
+- **Suppressions re-query at dispatch time, in code.** Mirrors SMS dispatch — same defense-in-depth for the rare race where an STOP came in via SMS in the milliseconds between intake and email send. Skip → `email_skipped_suppression` event row, no email sent.
+- **No PII in logs.** `[email] lead=<id> sent id=<resend-id>` or `[email] lead=<id> skip=suppression`.
+- **email_skipped_suppression event row, not just console log.** Same audit-trail rationale as the SMS skip events: refund disputes / compliance audits months later need the queryable history.
+- **From-address: `onboarding@resend.dev`** (Resend's pre-verified test sender). Works without owning a domain. For prod, swap `FROM_EMAIL` to `hello@<consumer-domain>` after DKIM/SPF/Return-Path CNAME setup — no LLC needed, just the domain.
+- **Subject line emoji-free** for spam-filter friendliness.
+
+**Compliance — flagged for ops awareness (CHANGELOG-tracked, also in launch checklist):**
+
+- **Welcome email + agent SMS are dispatched independently.** Both run in parallel inside the same `after()` callback; neither gates on the other. Failure modes:
+  - SMS skipped (DNC/suppression/Twilio error/A2P 10DLC pre-clearance) but email succeeds → user gets "your quote is on its way, an agent will call shortly" but agent never gets the lead → user thinks an agent is calling but no one will. Refund-bait at scale.
+  - Email skipped/fails but SMS succeeds → agent gets the lead and calls; user is just missing the welcome email. Annoying, not a compliance issue.
+  - Both fail → user gets `/api/leads` 200 (we already returned), no agent notification, no welcome email. Worst case for the user, no compliance issue (no false promise made via outbound channels).
+  - Phase 1 acceptance: low volume, manual reconciliation possible. Long-term mitigations: gate email on SMS success (non-trivial coordination layer), or rephrase the welcome so it doesn't promise a call by name. Listed in launch checklist + Operations Runbook (Part 5 area, alongside missing-lead complaints).
+- **STOP-via-text is wired; unsubscribe-via-reply is NOT.** The email body says "Reply STOP to any text or 'unsubscribe' here to opt out." STOP via SMS lands in `suppressions` via the Twilio webhook from the prior task. "Unsubscribe" via email reply is non-functional in Phase 1 — we don't process inbound email replies. Phase 1 workaround: monitor the from-address inbox manually; reply means manual `addSuppression` via Studio SQL editor.
+- **CAN-SPAM physical address** isn't in the email body. Welcome is transactional (acknowledges a user action), so technically exempt — but include the address for safety once the LLC has a registered address. Launch-checklist item.
+
+**Verification packet:**
+- `pnpm lint` clean (one pre-existing RHF/React-Compiler warning, not new)
+- `pnpm build` clean. Routes table unchanged (`/api/leads` is still the only intake route)
+- Migration diagnostic: `lead_event_type` enum now includes `email_skipped_suppression`; types regenerated
+- **Live email round-trip:** form-submitted lead with the developer's gmail received the welcome email at `simonovski132@gmail.com` (subject: "Your mortgage protection quote is on its way, Simon"); Resend API confirms `last_event: delivered`; `lead_events` shows three rows in the right order — `created` → `sms_sent` (Twilio SID `SM9b75...`, carrier-blocked at delivery per A2P 10DLC, expected) → `email_sent` (Resend id `32955f0c-...`), all within ~1.6 seconds of each other. Parallel dispatch confirmed by the timestamps (both completed within 0.3s of each other).
+- **Speed-to-lead in dev:** ~840-890ms steady-state, ~1.59s on first compile. Above the plan's 500ms target but **not a regression** from this task — `after()` runs the dispatch outside the response path, so adding email dispatch doesn't affect response time. The dev-mode latency floor is the Macedonia → US-East Supabase + Upstash network RTT (~150-200ms each); production deploys to US-East should hit ~300-400ms.
+- **Paranoid grep on `.next/static/`:** `RESEND_API_KEY` (name) absent; 20-char value prefix (silently checked) absent. Resend SDK doesn't leak.
+
 ## 2026-04-30 — Twilio agent SMS dispatch + STOP webhook (paired)
 
 Ships the agent SMS dispatcher and the inbound STOP webhook together — per `AGENTS.md` § 6, no outbound SMS goes out until STOP works end-to-end. Both pieces verified by execution; the live carrier-delivery loop closes when A2P 10DLC paperwork lands (see launch checklist below).

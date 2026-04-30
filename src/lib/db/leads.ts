@@ -156,3 +156,30 @@ export async function recordSmsSkipped(
   });
   if (error) throw error;
 }
+
+// Audit row for a successful welcome email dispatch. Resend message id
+// for cross-reference with Resend's dashboard.
+export async function recordEmailSent(
+  leadId: string,
+  resendId: string,
+): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from("lead_events").insert({
+    lead_id: leadId,
+    event_type: "email_sent",
+    event_data: { id: resendId },
+  });
+  if (error) throw error;
+}
+
+// Audit row for an email skipped at dispatch time. Only one variant for
+// email — DNC is a phone-only registry, doesn't apply.
+export async function recordEmailSkipped(leadId: string): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from("lead_events").insert({
+    lead_id: leadId,
+    event_type: "email_skipped_suppression",
+    event_data: { skipped_at: new Date().toISOString() },
+  });
+  if (error) throw error;
+}

@@ -197,9 +197,9 @@ See `docs/CHANGELOG.md`.
 
 ### Next immediate task
 
-Resend welcome email — second of the three notifications (Twilio dispatch + STOP shipped in the prior task). Same fire-and-forget pattern via `after()` from `src/app/api/leads/route.ts`. Prereqs: Resend free-tier account; for dev, send from `onboarding@resend.dev` (their verified test sender, no domain needed); for prod, verify a domain. Add `RESEND_API_KEY` + `FROM_EMAIL` env vars (already in `.env.example`).
+**Meta CAPI Lead event** — third (and last) notification dispatch from `/api/leads`. Server-side fetch to Meta's Conversions API per `02_Technical_Reference.md` Part 4.4 + 5.4. Slots into the existing `Promise.all` in the after() callback alongside `sendAgentSMS` and `sendWelcomeEmail`. Includes: hashed user data (em/ph), event_id for pixel deduplication, fbc/fbp from cookies, ip/ua, value=$40. Uses `META_TEST_EVENT_CODE` during dev (verifiable in Meta Events Manager → Test Events tab in real time) — remove before launch. Prereqs: Meta Business Manager account (personal Facebook works for dev), Meta Pixel + CAPI dataset created, `META_PIXEL_ID` + `META_CAPI_ACCESS_TOKEN` + `META_TEST_EVENT_CODE` env vars (already in `.env.example`).
 
-After Resend: Meta CAPI Lead event; daily DNC scrub cron; `/privacy` and `/terms` pages (footer links + consent-text references both 404 until then); replace placeholder copy from the skeleton + draft consent text with attorney-reviewed final versions. The `mpl-prod` Supabase project + baseline migration is a separate task deferred until launch is imminent (free-tier projects pause after 7 days of inactivity).
+After Meta CAPI: `/privacy` + `/terms` pages (kills the footer 404s + completes consent-text references); Meta Pixel installation on the landing page (client-side, pairs with the server-side CAPI for pixel-vs-CAPI dedup); daily DNC scrub cron (populates `dnc_registry` from FTC list); replace placeholder copy from the skeleton + draft consent text with attorney-reviewed final versions; Vercel deploy on hobby tier (gets a real public URL for the live STOP webhook test we deferred). The `mpl-prod` Supabase project + baseline migration is a separate task deferred until launch is imminent (free-tier projects pause after 7 days of inactivity).
 
 **Outstanding launch checklist (paperwork-blocked, NOT routine follow-ups):**
 - Real attorney-reviewed consent text (replaces the v1-draft from playbook 4.3)
@@ -207,6 +207,10 @@ After Resend: Meta CAPI Lead event; daily DNC scrub cron; `/privacy` and `/terms
 - Email MX lookup + disposable-email blocklist (form validation hardening per playbook 3.2)
 - Names "obvious garbage" heuristic (form validation hardening per playbook 3.2)
 - SMS watchdog cron (per playbook 4.5 — silent dispatch failures get logged once and dropped today)
-- LLC + EIN (gates the above)
+- Custom from-domain for the welcome email (currently `onboarding@resend.dev`; needs registered consumer domain + DKIM/SPF/Return-Path verification)
+- CAN-SPAM physical mailing address in welcome email body (needs LLC registered address)
+- Email reply-to opt-out handling (welcome email body invites "reply 'unsubscribe'" but no inbox monitor in Phase 1; Phase 1 manual workaround = check the FROM_EMAIL inbox and `addSuppression` via Studio SQL editor)
+- Welcome-email-vs-SMS independence asymmetry (welcome email promises a call by name even if SMS dispatch failed; refund risk at scale; see CHANGELOG entry for failure modes)
+- LLC + EIN (gates several of the above)
 
 > **Convention:** § 9 holds only the next immediate task. Completed items move to `docs/CHANGELOG.md`.
