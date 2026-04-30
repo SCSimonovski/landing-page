@@ -1,0 +1,178 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Privacy Policy — [BRAND NAME PLACEHOLDER]",
+  description: "Privacy policy for [BRAND NAME PLACEHOLDER] mortgage protection lead service.",
+};
+
+// Placeholder text — pending TCPA-experienced attorney review before launch.
+// Bracketed UPPERCASE markers (e.g. [BRAND NAME PLACEHOLDER], [RETENTION PERIOD]) indicate
+// values an attorney must specify or a launch-checklist item must fill. Do not invent specifics.
+
+export default function PrivacyPage() {
+  return (
+    <main className="mx-auto max-w-3xl px-6 py-16">
+      <div
+        role="alert"
+        className="mb-8 rounded-lg border border-yellow-300 bg-yellow-50 p-4 text-sm text-foreground"
+      >
+        <strong>DRAFT — pending TCPA-experienced attorney review.</strong> Not legal advice. The
+        text below is structurally complete placeholder content; specifics in [BRACKETED MARKERS]
+        must be filled by counsel before launch.
+      </div>
+
+      <h1 className="text-3xl font-bold text-foreground">Privacy Policy</h1>
+      <p className="mt-2 text-sm text-muted">
+        Last updated: [DRAFT — attorney review pending]
+      </p>
+
+      <div className="mt-8 space-y-8 text-base text-foreground">
+        <section>
+          <h2 className="text-xl font-semibold">1. Who we are</h2>
+          <p className="mt-2 text-muted">
+            [BRAND NAME PLACEHOLDER] (&ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;) operates a
+            mortgage-protection lead-generation service. We do not sell insurance. The service
+            connects homeowners who request a quote with a licensed insurance agent who will
+            contact them. Operating entity and registered address: [LLC NAME — to be added on
+            formation], [REGISTERED ADDRESS].
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold">2. Information we collect</h2>
+          <p className="mt-2 text-muted">
+            When you submit our form, we collect: your name, phone number, email address, US state
+            of residence, age, smoker status, homeownership status, mortgage balance, and best
+            time to call. We also automatically collect your IP address, user-agent string, the
+            page URL where you submitted the form, and any referral parameters from advertising
+            platforms (such as fbclid, utm_source, and related identifiers). We capture the exact
+            consent text shown to you and the timestamp of your consent.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold">3. How we use your information</h2>
+          <p className="mt-2 text-muted">
+            We use the information you provide to validate the submission, compute an internal
+            quality score, and forward your contact details to one licensed insurance agent who is
+            authorized to call or text you about mortgage protection options. We use the technical
+            information for fraud prevention, compliance recordkeeping, and ad-platform attribution.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold">4. Third parties we share with</h2>
+          <p className="mt-2 text-muted">
+            We share your contact information with the licensed insurance agent matched to your
+            submission. We use the following service providers: [HOSTING PROVIDER PLACEHOLDER]
+            (application hosting), Supabase (data processor for our database), Twilio (SMS
+            delivery), and Resend (transactional email delivery). Each provider is contractually
+            bound to handle your data only for the purposes described. We do not sell your
+            information to data brokers or unrelated third parties.
+            {/* When Meta CAPI ships, this list also adds: "and Meta Platforms (advertising
+                attribution via the Conversions API; user data is hashed with SHA-256 before
+                transmission)." That edit ships as a companion edit in the Meta CAPI plan. */}
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold">5. Your rights</h2>
+          <p className="mt-2 text-muted">
+            You may request access to, correction of, or deletion of your personal information at
+            any time by contacting us at the address below. We will respond within [RESPONSE
+            WINDOW — attorney to specify per applicable law]. You may also opt out of further
+            contact at any time using the mechanisms in the next section.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold">6. TCPA opt-out</h2>
+          <p className="mt-2 text-muted">
+            You can stop SMS messages by replying <strong>STOP</strong>{" "}
+            to any text message we send. To opt out of all contact, email us at the address
+            below or reply &lsquo;unsubscribe&rsquo; to any email from us. We honor opt-out requests
+            within the time frames required by applicable law.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold">7. Do-Not-Call compliance</h2>
+          <p className="mt-2 text-muted">
+            Before forwarding your contact information to a licensed agent, we check your phone
+            number against the FTC&apos;s Do-Not-Call registry. If your number is registered, we still
+            maintain your consent record but flag the lead so the agent can decline to contact
+            you, consistent with applicable law.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold">8. California Privacy Notice</h2>
+          <p className="mt-2 text-muted">
+            If you are a California resident, the California Consumer Privacy Act (CCPA) gives you
+            rights regarding personal information we collect. The categories of personal
+            information we collect are described in section 2. We collect this information
+            directly from you and (for technical fields) automatically when you visit our site.
+            Business purposes: lead validation, agent matching, fraud prevention, ad attribution.
+            We do not &ldquo;sell&rdquo; personal information as that term is defined under the CCPA.
+            Contact information for California rights requests: see section 14. [CALIFORNIA
+            PRIVACY NOTICE specifics — attorney to confirm against current CCPA requirements
+            before launch.]
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold">9. Cookies and tracking technologies</h2>
+          <p className="mt-2 text-muted">
+            Our site uses cookies set by the Meta Pixel (when present) for advertising attribution.
+            You can disable cookies in your browser settings. Disabling cookies does not prevent
+            you from submitting the form.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold">10. Data retention</h2>
+          <p className="mt-2 text-muted">
+            We retain your consent record for the period required by applicable law.
+            [RETENTION PERIOD — attorney to specify; FTC TSR currently requires a minimum of 5
+            years for consent records, but applicable laws may vary by jurisdiction.] We retain
+            other information for as long as necessary to deliver the service and comply with
+            legal obligations.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold">11. Children&apos;s privacy</h2>
+          <p className="mt-2 text-muted">
+            Our service is not intended for individuals under 18. We do not knowingly collect
+            personal information from minors.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold">12. International transfers</h2>
+          <p className="mt-2 text-muted">
+            Our service is intended for US residents. Personal information you submit is processed
+            and stored on servers located in the United States.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold">13. Changes to this policy</h2>
+          <p className="mt-2 text-muted">
+            We may update this privacy policy from time to time. The &ldquo;Last updated&rdquo; date at the
+            top reflects the most recent revision. We will not retroactively apply material changes
+            to information collected under prior versions.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-xl font-semibold">14. Contact</h2>
+          <p className="mt-2 text-muted">
+            For privacy questions, requests, or opt-out: email [PRIVACY CONTACT EMAIL] or write to
+            [LLC NAME], [REGISTERED ADDRESS].
+          </p>
+        </section>
+      </div>
+    </main>
+  );
+}

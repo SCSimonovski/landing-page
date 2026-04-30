@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -8,7 +9,7 @@ import {
   type LeadFormInput,
   US_STATES,
 } from "@/lib/validation/lead-schema";
-import { CONSENT_TEXT } from "@/lib/consent";
+import { CONSENT_TEXT, LINKED_CONSENT_SUFFIX } from "@/lib/consent";
 
 type SubmitState = "idle" | "submitting" | "success" | "error";
 
@@ -440,9 +441,22 @@ export function LeadForm() {
               {...register("consent")}
             />
             {/* CONSENT_TEXT renders verbatim — the same words go into consent_log
-                via the server. /privacy and /terms substring linking is a
-                follow-up task once those pages exist. */}
-            <span className="text-sm text-muted leading-relaxed">{CONSENT_TEXT}</span>
+                via the server. The trailing " See our Privacy Policy and Terms."
+                substring (LINKED_CONSENT_SUFFIX) is replaced at render time with
+                clickable <Link> elements so users can actually navigate. The
+                stored constant is unchanged: audit trail shows the literal words. */}
+            <span className="text-sm text-muted leading-relaxed">
+              {CONSENT_TEXT.replace(LINKED_CONSENT_SUFFIX, "")}
+              {" See our "}
+              <Link href="/privacy" className="underline hover:text-foreground">
+                Privacy Policy
+              </Link>
+              {" and "}
+              <Link href="/terms" className="underline hover:text-foreground">
+                Terms
+              </Link>
+              .
+            </span>
           </label>
           {errors.consent && (
             <p role="alert" className="mt-2 text-sm text-red-600">

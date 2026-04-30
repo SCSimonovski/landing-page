@@ -4,6 +4,49 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-04-30 — /privacy + /terms pages (placeholder, attorney review pending)
+
+Closes the dangling references that have been on the launch checklist since the form/api task. Every row in `consent_log` captures a `consent_text` that mentions "Privacy Policy" and "Terms" — pages that previously 404'd. Now they resolve, and the form's consent step + welcome email body link to them.
+
+**No schema changes, no new deps.**
+
+**New files:**
+- `src/app/privacy/page.tsx` — server component, max-width prose container, prominent yellow `DRAFT — pending attorney review` banner, h1 + 13 sections (who we are, what we collect, third parties, user rights, TCPA opt-out, California Privacy Notice, cookies, retention, children's privacy, international transfers, etc.)
+- `src/app/terms/page.tsx` — same shape, 11 sections (service description, acceptable use, user representations, disclaimer, liability, indemnification, governing law, dispute resolution, etc.)
+
+Both pages classified as `○ (Static)` in the build — prerendered, no per-request work.
+
+**Modified:**
+- `src/lib/consent.ts` — added `LINKED_CONSENT_SUFFIX` export and a module-load assertion that `CONSENT_TEXT.endsWith(LINKED_CONSENT_SUFFIX)`. Per architect review: defends against the silent failure mode where a future copy edit changes the trailing sentence, the form's `.replace()` no-ops, and the rendered consent shows duplicated content. Throw at import time means the dev server refuses to boot before anyone notices.
+- `src/components/lead-form.tsx` — replaced the single `<span>{CONSENT_TEXT}</span>` consent block with a render-layer pattern: strip `LINKED_CONSENT_SUFFIX` from the constant, render the body as plain text, then append the trailing sentence with `<Link>` elements wrapping "Privacy Policy" and "Terms". The constant itself is unchanged — what's stored in `consent_log` remains the literal words the user agreed to (audit-trail integrity).
+- `src/lib/email/welcome.ts` — replaced `[link to be added once /privacy ships]` placeholder with `${process.env.NEXT_PUBLIC_SITE_URL}/privacy` (absolute URL because emails have no base). Added a missing-env runtime guard: if `NEXT_PUBLIC_SITE_URL` is unset/blank at dispatch time, skip the send and log without PII rather than render `Privacy policy: undefined/privacy` in the body. Defense-in-depth on top of the existing pre-flight check that the env var is in `.env.local`.
+
+**Placeholder writing discipline:** both pages use bracketed UPPERCASE markers (`[BRAND NAME PLACEHOLDER]`, `[REGISTERED ADDRESS]`, `[RETENTION PERIOD — attorney to specify]`, `[STATE PLACEHOLDER]`, etc.) for every specific claim, commitment, or numerical statement. The yellow draft banner catches "this is unfinished"; the bracket-marker convention catches "this placeholder accidentally makes a claim we'd have to honor." 14 markers in `/privacy`, 12 in `/terms`. Compliance scan against the two files is clean: no `$N`, no "guaranteed", no `\bfree\b`, no "limited time".
+
+**Compliance — what we did:**
+- `consent_log` audit-trail dangling references resolve. Form's consent text now has clickable links; emailed welcome includes the absolute privacy URL; both URLs point at real pages. Internally consistent.
+- `CONSENT_TEXT` constant unchanged; verified by querying the latest `consent_log` row — `position(' See our Privacy Policy and Terms.' in consent_text) = 645`, `length = 678`, suffix occupies the trailing 34 characters exactly. The render layer change did NOT mutate the stored words.
+- Module-load assertion in `consent.ts` is the safety net for the `.replace()` fragility: if anyone edits the constant's trailing sentence without updating `LINKED_CONSENT_SUFFIX`, import-time throw with an actionable error message.
+- Welcome email runtime guard: missing-env failure is loud, not silent.
+
+**Compliance — what we did NOT close (still on the launch checklist):**
+- Real attorney-reviewed legal text replacing both pages — **important: review all three artifacts together** (`/privacy`, `/terms`, `src/lib/consent.ts` `CONSENT_TEXT`), because they cross-reference each other. ToS § 4 representations interact with the consent text; ToS § 11 Privacy ↔ Privacy § 4 third parties; ToS § 8 governing law ↔ LLC formation state. Single attorney engagement covering all three is cheaper and more coherent than three separate reviews.
+- LLC name + registered address (currently `[BRAND NAME PLACEHOLDER]` / `[REGISTERED ADDRESS]` markers throughout — same convention as the consent text and skeleton H1)
+- Real "last updated" date once content is finalized
+- California Privacy Notice section reviewed against current CCPA requirements (placeholder mentions categories but specifics need attorney pass)
+- CAN-SPAM physical address in welcome email body (gates on LLC; consistent with the gap above)
+- ToS § 9 dispute resolution: deliberate forum/arbitration/jury-trial-waiver decision (currently a neutral bracket marker that forces attorney to choose, not a default that nudges toward arbitration)
+- Privacy § 4 third-party list: add Meta Platforms when Meta CAPI ships (companion edit baked into the eventual Meta CAPI plan; see comment in `src/app/privacy/page.tsx` § 4)
+
+**Verification packet:**
+- `pnpm lint` clean (one pre-existing RHF/React-Compiler warning, not new)
+- `pnpm build` clean. `/privacy` and `/terms` both classified `○ (Static)` in the route table
+- `curl http://localhost:3000/privacy` → HTTP 200; same for `/terms` (previously 404)
+- `grep -F "See our Privacy Policy and Terms." src/lib/consent.ts` → constant unchanged
+- Compliance scan on new pages: clean (no forbidden tokens)
+- Bracket-marker presence: 14 in `/privacy`, 12 in `/terms` (intentionally heavy — a real attorney pass would replace each)
+- Live form submission: `consent_log` row stores the literal `CONSENT_TEXT` verbatim (suffix at the right position, length matches); welcome email body via Resend API confirms `Privacy policy: http://localhost:3000/privacy` rendered correctly
+
 ## 2026-04-30 — Resend welcome email (parallel dispatch with Twilio)
 
 Ships the welcome email, the second of three notifications dispatched from `/api/leads`. Plain-text per playbook 4.3, sent in parallel with the agent SMS via `Promise.all` inside the existing `after()` callback so neither dispatcher gates on the other's completion.

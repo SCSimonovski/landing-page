@@ -197,20 +197,22 @@ See `docs/CHANGELOG.md`.
 
 ### Next immediate task
 
-**Meta CAPI Lead event** — third (and last) notification dispatch from `/api/leads`. Server-side fetch to Meta's Conversions API per `02_Technical_Reference.md` Part 4.4 + 5.4. Slots into the existing `Promise.all` in the after() callback alongside `sendAgentSMS` and `sendWelcomeEmail`. Includes: hashed user data (em/ph), event_id for pixel deduplication, fbc/fbp from cookies, ip/ua, value=$40. Uses `META_TEST_EVENT_CODE` during dev (verifiable in Meta Events Manager → Test Events tab in real time) — remove before launch. Prereqs: Meta Business Manager account (personal Facebook works for dev), Meta Pixel + CAPI dataset created, `META_PIXEL_ID` + `META_CAPI_ACCESS_TOKEN` + `META_TEST_EVENT_CODE` env vars (already in `.env.example`).
+**Vercel deploy on hobby tier.** Gets a real public URL → unblocks the deferred live STOP webhook test (no more ngrok dependency), prepares the surface that future Meta Pixel install will land on (Meta wants a real URL to verify the Pixel against), and lets us eat our own dog food on the same code path real users will hit. Architect-recommended ordering: deploy → live STOP test → Pixel install → server-side Meta CAPI. Hobby tier is free; needs Vercel account (5 min). A registered consumer domain is nice-to-have but not required (default `*.vercel.app` URL works for the verification).
 
-After Meta CAPI: `/privacy` + `/terms` pages (kills the footer 404s + completes consent-text references); Meta Pixel installation on the landing page (client-side, pairs with the server-side CAPI for pixel-vs-CAPI dedup); daily DNC scrub cron (populates `dnc_registry` from FTC list); replace placeholder copy from the skeleton + draft consent text with attorney-reviewed final versions; Vercel deploy on hobby tier (gets a real public URL for the live STOP webhook test we deferred). The `mpl-prod` Supabase project + baseline migration is a separate task deferred until launch is imminent (free-tier projects pause after 7 days of inactivity).
+After Vercel deploy: live STOP webhook test (text STOP to the Twilio number, see the row land in `suppressions`); Meta Pixel client-side install in `<head>` (pairs with the eventual server-side Meta CAPI for event_id dedup); Meta CAPI server-side dispatch (`/api/leads` Promise.all third entry); daily DNC scrub cron (populates `dnc_registry` from the FTC list); replace placeholder copy + draft consent text + draft `/privacy` + `/terms` content with attorney-reviewed final versions; register a custom consumer domain. The `mpl-prod` Supabase project + baseline migration is a separate task deferred until launch is imminent (free-tier projects pause after 7 days of inactivity).
 
 **Outstanding launch checklist (paperwork-blocked, NOT routine follow-ups):**
-- Real attorney-reviewed consent text (replaces the v1-draft from playbook 4.3)
+- **Real attorney-reviewed legal text** — replaces the v1-draft consent text (playbook 4.3) AND the placeholder content on `/privacy` + `/terms` (currently a yellow-banner draft with bracket-marker `[PLACEHOLDER]` slots throughout). Legal review is one cross-cutting task, not three.
 - Twilio A2P 10DLC registration — needs LLC + EIN. Until done, outbound SMS is silently dropped at the carrier (Twilio API returns success; messages show `status=undelivered` with carrier error 30034 for long-codes / 30032 for toll-free TFV). Code is right; delivery is paperwork-blocked.
 - Email MX lookup + disposable-email blocklist (form validation hardening per playbook 3.2)
 - Names "obvious garbage" heuristic (form validation hardening per playbook 3.2)
 - SMS watchdog cron (per playbook 4.5 — silent dispatch failures get logged once and dropped today)
 - Custom from-domain for the welcome email (currently `onboarding@resend.dev`; needs registered consumer domain + DKIM/SPF/Return-Path verification)
-- CAN-SPAM physical mailing address in welcome email body (needs LLC registered address)
+- CAN-SPAM physical mailing address in welcome email body AND in `/privacy` + `/terms` text (needs LLC registered address; placeholder markers in all three places now)
 - Email reply-to opt-out handling (welcome email body invites "reply 'unsubscribe'" but no inbox monitor in Phase 1; Phase 1 manual workaround = check the FROM_EMAIL inbox and `addSuppression` via Studio SQL editor)
 - Welcome-email-vs-SMS independence asymmetry (welcome email promises a call by name even if SMS dispatch failed; refund risk at scale; see CHANGELOG entry for failure modes)
+- `META_TEST_EVENT_CODE` removal pre-launch (when Meta CAPI ships) — forgot-to-remove means production events go to Test Events tab forever, never train the optimization model
+- Meta Pixel install + privacy-policy ad-data-sharing disclosure (current `/privacy` placeholder mentions Meta CAPI sharing in section 4 but specifics need attorney review)
 - LLC + EIN (gates several of the above)
 
 > **Convention:** § 9 holds only the next immediate task. Completed items move to `docs/CHANGELOG.md`.

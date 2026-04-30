@@ -19,7 +19,7 @@ import {
 // "or 'unsubscribe' here to opt out" instruction is NOT wired in Phase 1
 // — we don't process inbound email replies. Asymmetry documented in the
 // task CHANGELOG.
-function renderWelcomeEmail(firstName: string): {
+function renderWelcomeEmail(firstName: string, siteUrl: string): {
   subject: string;
   text: string;
 } {
@@ -40,7 +40,7 @@ function renderWelcomeEmail(firstName: string): {
     "[BRAND NAME PLACEHOLDER]",
     "",
     "---",
-    "Privacy policy: [link to be added once /privacy ships]",
+    `Privacy policy: ${siteUrl}/privacy`,
     "Reply STOP to any text or 'unsubscribe' here to opt out.",
   ].join("\n");
   return { subject, text };
@@ -67,7 +67,16 @@ export async function sendWelcomeEmail(leadId: string): Promise<void> {
       return;
     }
 
-    const { subject, text } = renderWelcomeEmail(lead.first_name);
+    // Defense-in-depth: if NEXT_PUBLIC_SITE_URL is unset/blank, the privacy
+    // link in the body would render as "undefined/privacy". Fail loud
+    // (skip + log) rather than ship a broken email.
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    if (!siteUrl) {
+      console.error(`[email] lead=${leadId} skip=missing_site_url`);
+      return;
+    }
+
+    const { subject, text } = renderWelcomeEmail(lead.first_name, siteUrl);
     const resend = getResendClient();
     const { data, error } = await resend.emails.send({
       from: process.env.FROM_EMAIL!,
