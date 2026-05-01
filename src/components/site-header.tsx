@@ -5,7 +5,7 @@ export function SiteHeader() {
   return (
     <>
       <div className="bg-foreground text-background-card">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-2.5 text-[8px] font-medium tracking-[0.16em] uppercase">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-1.5 sm:py-2 text-[6px] sm:text-[8px] font-medium tracking-[0.16em] uppercase">
           <span>Form NG-1 · Mortgage Protection Inquiry</span>
           <span className="hidden sm:inline opacity-65">
             TCPA-compliant intake · Licensed insurance agents
@@ -14,7 +14,7 @@ export function SiteHeader() {
       </div>
 
       <header className="sticky top-0 z-30 h-16 sm:h-20 bg-background/95 backdrop-blur-sm shadow-[0_1px_3px_rgba(31,42,40,0.06)]">
-        <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-6">
+        <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link
             href="/"
             aria-label="Northgate Protection home"
@@ -26,7 +26,7 @@ export function SiteHeader() {
               width={360}
               height={80}
               priority
-              className="h-11 w-auto sm:h-14"
+              className="h-14 w-auto sm:h-16"
             />
           </Link>
 
@@ -55,7 +55,7 @@ export function SiteHeader() {
             </a>
           </nav>
 
-          <span className="sm:hidden text-[11px] font-medium tracking-[0.06em] uppercase text-accent-sage-deep">
+          <span className="sm:hidden whitespace-nowrap text-[10px] font-medium tracking-[0.04em] uppercase text-accent-sage-deep">
             Mortgage Protection
           </span>
         </div>

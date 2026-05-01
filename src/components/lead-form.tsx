@@ -8,6 +8,7 @@ import {
   LeadFormSchema,
   type LeadFormInput,
   US_STATES,
+  US_STATE_NAMES,
 } from "@/lib/validation/lead-schema";
 import { CONSENT_TEXT, LINKED_CONSENT_SUFFIX } from "@/lib/consent";
 
@@ -342,7 +343,7 @@ export function LeadForm() {
               </option>
               {US_STATES.map((s) => (
                 <option key={s} value={s}>
-                  {s}
+                  {US_STATE_NAMES[s]}
                 </option>
               ))}
             </select>
@@ -436,7 +437,7 @@ export function LeadForm() {
             <legend className="block text-base font-medium text-foreground">
               Best time to call
             </legend>
-            <div className="mt-2 grid grid-cols-3 gap-3">
+            <div className="mt-2 grid grid-cols-3 gap-2">
               {(["morning", "afternoon", "evening"] as const).map((t) => (
                 <YesNoButton
                   key={t}
@@ -550,7 +551,7 @@ function YesNoButton({
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={`min-h-11 px-4 rounded-md border text-base font-medium transition-colors ${
+      className={`min-h-11 px-3 sm:px-4 rounded-md border text-sm sm:text-base font-medium transition-colors ${
         selected
           ? "bg-accent text-background-card border-accent"
           : "bg-background-card text-foreground border-border hover:bg-background"
