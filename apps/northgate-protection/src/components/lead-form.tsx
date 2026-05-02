@@ -9,8 +9,8 @@ import {
   type LeadFormInput,
   US_STATES,
   US_STATE_NAMES,
-} from "@/lib/validation/lead-schema";
-import { CONSENT_TEXT, LINKED_CONSENT_SUFFIX } from "@/lib/consent";
+} from "@platform/shared/validation/lead-schema";
+import { CONSENT_TEXT, LINKED_CONSENT_SUFFIX } from "@platform/shared/utils/consent";
 
 type SubmitState = "idle" | "submitting" | "success" | "error";
 

@@ -1,9 +1,9 @@
 import { NextResponse, after } from "next/server";
-import { LeadFormSchema, type LeadFormInput } from "@/lib/validation/lead-schema";
-import { CONSENT_TEXT, FORM_VERSION } from "@/lib/consent";
-import { computeIntentScore, computeTemperature } from "@/lib/intent";
-import { normalizePhone } from "@/lib/phone";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { LeadFormSchema, type LeadFormInput } from "@platform/shared/validation/lead-schema";
+import { CONSENT_TEXT, FORM_VERSION } from "@platform/shared/utils/consent";
+import { computeIntentScore, computeTemperature } from "@platform/shared/utils/intent";
+import { normalizePhone } from "@platform/shared/utils/phone";
+import { checkRateLimit } from "@platform/shared/utils/rate-limit";
 import {
   insertLeadWithConsent,
   isSuppressed,
@@ -11,9 +11,9 @@ import {
   findRecentDuplicate,
   recordDuplicateAttempt,
   type LeadInsertInput,
-} from "@/lib/db/leads";
-import { sendAgentSMS } from "@/lib/sms/dispatch";
-import { sendWelcomeEmail } from "@/lib/email/welcome";
+} from "@platform/shared/db/leads";
+import { sendAgentSMS } from "@platform/shared/sms/dispatch";
+import { sendWelcomeEmail } from "@platform/shared/email/welcome";
 
 export const dynamic = "force-dynamic";
 

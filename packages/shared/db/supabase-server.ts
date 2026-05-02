@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/types/database";
+import type { Database } from "../types/database";
 
 export function createServiceRoleClient() {
   return createClient<Database>(

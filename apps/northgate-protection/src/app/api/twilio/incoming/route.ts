@@ -1,6 +1,6 @@
-import { verifyTwilioSignature } from "@/lib/twilio/verify-signature";
-import { isStopKeyword } from "@/lib/twilio/messages";
-import { addSuppression } from "@/lib/db/suppressions";
+import { verifyTwilioSignature } from "@platform/shared/twilio/verify-signature";
+import { isStopKeyword } from "@platform/shared/twilio/messages";
+import { addSuppression } from "@platform/shared/db/suppressions";
 
 export const dynamic = "force-dynamic";
 

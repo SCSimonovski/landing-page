@@ -1,5 +1,5 @@
-import { createServiceRoleClient } from "@/lib/db/supabase-server";
-import { checkHealthRateLimit } from "@/lib/rate-limit";
+import { createServiceRoleClient } from "@platform/shared/db/supabase-server";
+import { checkHealthRateLimit } from "@platform/shared/utils/rate-limit";
 
 export const dynamic = "force-dynamic";
 

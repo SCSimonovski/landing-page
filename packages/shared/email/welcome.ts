@@ -1,11 +1,11 @@
 import "server-only";
-import { getResendClient } from "@/lib/resend/client";
+import { getResendClient } from "../resend/client";
 import {
   getLeadById,
   isSuppressed,
   recordEmailSent,
   recordEmailSkipped,
-} from "@/lib/db/leads";
+} from "../db/leads";
 
 // Welcome email per docs/playbook/02_Technical_Reference.md Part 4.3.
 // Plain text only — higher inbox placement, no rendering surprises.

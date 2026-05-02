@@ -1,5 +1,5 @@
 import "server-only";
-import { createServiceRoleClient } from "@/lib/db/supabase-server";
+import { createServiceRoleClient } from "./supabase-server";
 
 // Add a row to suppressions, idempotent on phone_e164. The pre-check avoids
 // duplicate rows from double-STOP / app-retry / fat-finger; same code-level
