@@ -87,7 +87,28 @@ Detailed rationale and integration patterns in `02_Technical_Reference.md` Parts
 └── public/
 ```
 
-When Phase 2 begins, this repo becomes a pnpm workspace and `src/lib/{db,validation,types}/` lifts cleanly into a `packages/shared` folder. Keep code in those folders cohesive and free of Next.js-specific imports so the migration stays mechanical.
+The repo is a pnpm workspace. Workspace package `@platform/shared` holds the shared dispatchers, db helpers, validation schemas, and utilities that any app (consumer landing page or platform) imports. The shape:
+
+```
+apps/
+  northgate-protection/    ← mortgage protection landing page (current)
+  <future second brand>/   ← scaffolded when the second product is chosen
+  platform/                ← agent platform (Phase 2)
+packages/
+  shared/                  ← @platform/shared (workspace internal)
+    db/                    ← Supabase clients + leads/suppressions helpers (server-only)
+    validation/            ← Zod schemas (used both client and server)
+    types/                 ← generated Database types + shared interfaces
+    twilio/                ← Twilio adapter (client, message format, signature verify)
+    resend/                ← Resend adapter (client)
+    sms/                   ← SMS dispatch business action (uses twilio/)
+    email/                 ← Welcome email business action (uses resend/)
+    utils/                 ← consent text, intent score, phone normalize, rate-limit
+```
+
+App imports look like `@platform/shared/db/leads`, `@platform/shared/utils/consent`, etc. Internal cross-references inside `packages/shared/` use relative paths (`./supabase-server`, `../db/leads`). The shared package ships raw `.ts` source — `apps/northgate-protection/next.config.ts` adds `transpilePackages: ["@platform/shared"]` so Next compiles it on demand (no build step). The vendor-adapter (twilio/, resend/) vs business-action (sms/, email/) split is intentional: adapters can change independently of the action layer.
+
+**`packages/shared/utils/consent.ts` and `packages/shared/utils/intent.ts` are mortgage-protection-specific, not generically shared.** They live in shared/utils/ today because there is one app. When a second consumer brand lands, re-evaluate placement — they may need to move to per-app or get parameterized by product.
 
 ---
 
@@ -197,9 +218,9 @@ See `docs/CHANGELOG.md`.
 
 ### Next immediate task
 
-**Meta Pixel client-side install.** Now that the deploy is live at `https://northgateprotection.vercel.app`, Meta has a real URL it can verify the Pixel against. Pixel goes in `<head>` and pairs with the eventual server-side Meta CAPI dispatch for `event_id` deduplication — install both close in time so we don't ship a window where Pixel-only events double-count when CAPI lands. Architect-recommended ordering: Pixel → server-side Meta CAPI (slots into the existing `Promise.all` in `/api/leads` `after()`).
+**Meta Pixel client-side install.** Workspace lift complete (see CHANGELOG); next-task slot returns to Pixel. Now that the deploy is at `northgateprotection.vercel.app` and Meta has a real URL to verify against, Pixel goes in `<head>` and pairs with the eventual server-side Meta CAPI dispatch for `event_id` deduplication. Install both close in time so we don't ship a window where Pixel-only events double-count when CAPI lands. Architect-recommended ordering: Pixel → server-side Meta CAPI (slots into the existing `Promise.all` in `/api/leads` `after()`).
 
-Subsequent tasks (rough order, not committed): server-side Meta CAPI dispatch (`/api/leads` `Promise.all` third entry); daily DNC scrub cron (populates `dnc_registry` from the FTC list); replace placeholder copy + draft consent text + draft `/privacy` + `/terms` content with attorney-reviewed final versions; register a custom consumer domain (gates on LLC + brand); `mpl-prod` Supabase project + baseline migration replay (deferred until launch is imminent — free-tier projects pause after 7 days of inactivity).
+Subsequent tasks (rough order, not committed): server-side Meta CAPI dispatch (`/api/leads` `Promise.all` third entry); second-brand scaffold IF the strategic decision lands (separate plan; needs schema migration adding `brand` + `product` + `details JSONB` to `leads` and `consent_log`, plus informational `source_brand` on `suppressions`); daily DNC scrub cron (populates `dnc_registry` from the FTC list); replace placeholder copy + draft consent text + draft `/privacy` + `/terms` content with attorney-reviewed final versions; register a custom consumer domain (gates on LLC + brand); `mpl-prod` Supabase project + baseline migration replay (deferred until launch is imminent — free-tier projects pause after 7 days of inactivity).
 
 **Vercel deploy posture (current):** Public URL is `https://northgateprotection.vercel.app` (renamed from the auto-generated slug early in the deploy task). This is a **public-URL dev environment, NOT launch.** Vercel's production env points at `mpl-dev` (the only Supabase project we have). Real launch requires `mpl-prod` + custom domain + LLC + A2P 10DLC + attorney-reviewed text. CT-log scanners WILL find the `*.vercel.app` URL; expect junk lead accumulation in `mpl-dev` from automated probes (mitigations: rate limits already in place, mpl-dev gets dropped before launch). Twilio webhook now points at the Vercel URL; outbound SMS still A2P-blocked at the carrier.
 

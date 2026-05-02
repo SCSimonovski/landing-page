@@ -1,13 +1,13 @@
 import "server-only";
-import { getTwilioClient } from "@/lib/twilio/client";
-import { formatAgentSMS } from "@/lib/twilio/messages";
+import { getTwilioClient } from "../twilio/client";
+import { formatAgentSMS } from "../twilio/messages";
 import {
   getLeadById,
   isOnDNC,
   isSuppressed,
   recordSmsSent,
   recordSmsSkipped,
-} from "@/lib/db/leads";
+} from "../db/leads";
 
 // Send the new-lead SMS to the agent. Called via after() from /api/leads
 // so it runs after the response is queued — does not block speed-to-lead.

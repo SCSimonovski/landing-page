@@ -1,6 +1,6 @@
 import "server-only";
-import { createServiceRoleClient } from "@/lib/db/supabase-server";
-import type { Database, Json } from "@/lib/types/database";
+import { createServiceRoleClient } from "./supabase-server";
+import type { Database, Json } from "../types/database";
 
 type LeadRow = Database["public"]["Tables"]["leads"]["Row"];
 

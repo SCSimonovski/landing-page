@@ -18,9 +18,9 @@
 // Both must hold — "we logged a skip" and "we sent SMS and ALSO logged a
 // skip" are very different bugs.
 
-import { createServiceRoleClient } from "@/lib/db/supabase-server";
-import { sendAgentSMS } from "@/lib/sms/dispatch";
-import { getTwilioClient } from "@/lib/twilio/client";
+import { createServiceRoleClient } from "@platform/shared/db/supabase-server";
+import { sendAgentSMS } from "@platform/shared/sms/dispatch";
+import { getTwilioClient } from "@platform/shared/twilio/client";
 
 const TEST_PHONE = "+12025550199";
 const TEST_EMAIL = "test+dispatch-suppression@example.com";

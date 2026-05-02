@@ -1,4 +1,4 @@
-import type { Database } from "@/lib/types/database";
+import type { Database } from "../types/database";
 
 type LeadRow = Database["public"]["Tables"]["leads"]["Row"];
 

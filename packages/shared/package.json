@@ -1,0 +1,33 @@
+{
+  "name": "@platform/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./db/leads": "./db/leads.ts",
+    "./db/suppressions": "./db/suppressions.ts",
+    "./db/supabase-server": "./db/supabase-server.ts",
+    "./validation/lead-schema": "./validation/lead-schema.ts",
+    "./types/database": "./types/database.ts",
+    "./twilio/client": "./twilio/client.ts",
+    "./twilio/messages": "./twilio/messages.ts",
+    "./twilio/verify-signature": "./twilio/verify-signature.ts",
+    "./resend/client": "./resend/client.ts",
+    "./sms/dispatch": "./sms/dispatch.ts",
+    "./email/welcome": "./email/welcome.ts",
+    "./utils/consent": "./utils/consent.ts",
+    "./utils/intent": "./utils/intent.ts",
+    "./utils/phone": "./utils/phone.ts",
+    "./utils/rate-limit": "./utils/rate-limit.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.104.1",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.37.0",
+    "libphonenumber-js": "^1.12.42",
+    "resend": "^6.12.2",
+    "server-only": "^0.0.1",
+    "twilio": "^6.0.0",
+    "zod": "^4.3.6"
+  }
+}
