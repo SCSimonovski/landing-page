@@ -34,25 +34,25 @@ export function SiteHeader() {
             aria-label="Primary"
             className="hidden sm:flex items-center gap-7 text-sm font-medium"
           >
-            <a
-              href="#how"
+            <Link
+              href="/#how"
               className="text-foreground-soft hover:text-foreground min-h-11 inline-flex items-center"
             >
               How it works
-            </a>
-            <a
-              href="#faq"
+            </Link>
+            <Link
+              href="/#faq"
               className="text-foreground-soft hover:text-foreground min-h-11 inline-flex items-center"
             >
               FAQ
-            </a>
-            <a
-              href="#lead-form"
+            </Link>
+            <Link
+              href="/#lead-form"
               className="inline-flex min-h-11 items-center gap-2 rounded-full bg-accent px-5 py-2 text-sm font-medium text-background-card hover:bg-accent-hover"
             >
               Start my quote
               <span aria-hidden="true">→</span>
-            </a>
+            </Link>
           </nav>
 
           <span className="sm:hidden whitespace-nowrap text-[10px] font-medium tracking-[0.04em] uppercase text-accent-sage-deep">
