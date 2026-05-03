@@ -4,6 +4,54 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-05-03 — Heritage UI: apply user-supplied Hearth direction (cream + navy + terracotta)
+
+Follow-up to the Plan 2b commit on the same `scaffold-northgate-heritage` branch. The first Plan 2b commit shipped Heritage with an invented warm-cream + burgundy/gold palette that the user had not approved. User supplied two design screenshots (mobile + desktop) showing the actual Hearth direction — pivots Heritage to:
+
+- **Palette:** warm cream `#EBE0CE` page bg, dark navy `#14253A` foreground/`background-deep`, terracotta `#B85541` accent for CTAs / italic flourishes / breadcrumb dashes / chip bullets / step numerals. Lighter cream `#F4ECDB` for cards. Stone border `#D4C7AC`. Replaces the prior burgundy/gold tokens in `apps/northgate-heritage/src/app/globals.css`.
+- **Typography:** Fraunces serif (loaded with both `normal` + `italic` styles in `layout.tsx`) for H1 + section headings + numerals. Geist sans for body, chips, nav, form. The serif italic emphasis pattern (`*settled.*` / `*That's all.*` / `*One agent.*` / `*won't*`) carries the brand voice.
+- **Layout:** matches the screenshots — left-content + right-hero side-by-side on desktop, stacked on mobile. Breadcrumb-style label above H1 (`— Final Expense · For Families` with terracotta dash). Terracotta CTA button. Bullet chips on a thin border-top divider. "HOW IT WORKS" section on dark navy with cream text + italic terracotta numerals (01/02/03) + step content. PROMISES section similar (italic terracotta numerals on dark navy band). FAQ with `+` toggle in terracotta.
+- **Header:** clean — logo + nav. Removed the top dark compliance band (Form NH-1 strip) that the prior commit had — screenshots show no such band. Mobile shows phone-number CTA on the right.
+- **Logos:** rebuilt `public/heritage-logo*.svg` to use NP's arch motif (sibling-brand visual unity) with `HERITAGE` wordmark in dark navy `#14253A` + terracotta `#B85541` for the small-caps brand line. Replaces the placeholder triangle/hearth mark from the first Plan 2b commit.
+- **`<HeritageHero>`:** rewritten as a diagonal-stripe cream rectangle + small dark-navy "THE POINT" callout overlay (`If something happens, the costs are covered.`). Matches the screenshot composition. **No longer a placeholder banner** — this IS the design.
+- **`NEXT_PUBLIC_HERO_PLACEHOLDER` env var REMOVED** from all 3 `.env.local` files. The new hero is the actual design (intentional editorial composition), not a placeholder gated on a banner. `pnpm verify-envs` now back to 17 keys × 3 locations (was 18 in the prior commit).
+
+**FE copy** (only thing changed from the screenshots' NP text per user direction):
+- Breadcrumb: `— Final Expense · For Families` (was `— Mortgage Protection · For Homeowners`).
+- H1: `What you leave them, *settled.*` (was `The home you've paid into, *still home.*`).
+- Hero body: `Coverage that pays for end-of-life expenses so your family isn't left with the bill. We connect you with one licensed agent in your state — they explain the options, you decide.`
+- "THE POINT" callout: `If something happens, the costs are covered.` (was `If something happens, the mortgage still gets paid.`).
+- Hero stripe overlay: `Home · Table · Quiet hour` (was `Home · Porch · Golden hour`).
+- Step 1 title: `Tell us a few basics` (was `Tell us about your mortgage`); detail: `Six short questions. Coverage, age, beneficiary, the basics.`
+- Steps 2 + 3 unchanged (`We match you with an agent`, `They reach out`).
+- FAQ: 7 entries (NP has 5). Heritage adds two FE-specific entries: "What is final expense insurance?" + "Do I need a medical exam?".
+- All compliance constraints from playbook 02 § 2.3 still cleared (no specific dollar amounts, no fear imagery, no false urgency, no fabricated testimonials, no "guaranteed approval").
+
+**Files modified vs first Plan 2b commit:**
+- `apps/northgate-heritage/src/app/globals.css` — palette tokens swapped (burgundy/gold → terracotta on cream + navy).
+- `apps/northgate-heritage/src/app/layout.tsx` — Fraunces loaded with `normal` + `italic` (was `italic` only).
+- `apps/northgate-heritage/src/app/page.tsx` — full layout rewrite to match screenshot composition + FE copy adapted from screenshot's NP copy.
+- `apps/northgate-heritage/src/app/privacy/page.tsx` + `terms/page.tsx` — token swaps `accent-burgundy` → `accent-terracotta`.
+- `apps/northgate-heritage/src/components/site-header.tsx` — removed top compliance band; clean logo + nav; mobile phone CTA.
+- `apps/northgate-heritage/src/components/site-footer.tsx` — palette swap (burgundy → navy + terracotta).
+- `apps/northgate-heritage/src/components/heritage-hero.tsx` — rewrote as diagonal-stripe rect + THE POINT callout. No longer reads `NEXT_PUBLIC_HERO_PLACEHOLDER`.
+- `apps/northgate-heritage/src/components/lead-form.tsx` — token swaps `accent-burgundy*` → `accent-terracotta*`; box-shadow color swap to navy.
+- `apps/northgate-heritage/public/heritage-logo*.svg` — rebuilt to NP arch + `HERITAGE` wordmark + dark-navy + terracotta.
+- `.env.local` (root) + `apps/northgate-protection/.env.local` + `apps/northgate-heritage/.env.local` — removed `NEXT_PUBLIC_HERO_PLACEHOLDER` key.
+- `AGENTS.md` § 9 launch checklist — Heritage hero photography goes from "firm SAC blocker" to "intentional editorial choice; real photo optional future enhancement" (mirrors NP's Meridian posture).
+
+**Files orphaned (not removed, harmless):**
+- `apps/northgate-heritage/public/hero-placeholder.svg` — no longer referenced. Permission denied on rm; left as dead file. Can be deleted manually.
+
+**Verification — all PASS:**
+- Heritage lint clean (1 RHF warning — same pattern as NP, 0 errors).
+- Heritage build clean. Route table identical to first Plan 2b commit (4 static + 3 dynamic).
+- `pnpm verify-envs` clean — 3 locations × 17 keys (down from 18 after `NEXT_PUBLIC_HERO_PLACEHOLDER` removal).
+- Negative-path test (`scripts/test-format-agent-sms-assertion.ts`): unchanged — still 8/8 PASS. The redo touches Heritage UI only; per-product Zod schemas + dispatcher templates are untouched.
+- NP unchanged — runtime, route table, SMS body all identical to Plan 2a post-state.
+
+**Why a follow-up commit instead of amending the first Plan 2b commit:** standard practice per AGENTS.md. The first commit shipped a UI direction the user hadn't approved; the follow-up applies the user's actual design. Keeping both commits in history makes the design pivot legible to future readers (and to anyone reading the branch diff before merge). The two commits will land together in the same PR.
+
 ## 2026-05-03 — Scaffold apps/northgate-heritage (Plan 2b — Final Expense sibling brand)
 
 Plan 2b of the second-brand sequence per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. **Heritage app scaffolded as a sibling Next.js app** (`apps/northgate-heritage/`) sharing infrastructure via `@platform/shared` but with its own UI, copy, env, and (forthcoming) Vercel project. The 4 placeholder files Plan 2a left at `packages/shared/{validation/details, twilio/templates, email/templates}/final_expense.ts` were populated with real implementations. NP unchanged at runtime (only NP-touching change is dev-script port pin from `next dev` to `next dev --port 3000` for symmetric explicitness with Heritage's `--port 3001`).

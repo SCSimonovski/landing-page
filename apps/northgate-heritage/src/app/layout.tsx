@@ -11,14 +11,14 @@ const geist = Geist({
 const fraunces = Fraunces({
   variable: "--font-fraunces",
   subsets: ["latin"],
-  style: ["italic"],
+  style: ["normal", "italic"],
   display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "Northgate Heritage — Final Expense Insurance Quotes",
   description:
-    "We connect families with one licensed insurance agent in their state. The agent walks you through final expense coverage that fits your needs and budget. You decide.",
+    "Coverage that takes care of the bills your family shouldn't have to. We connect you with one licensed insurance agent in your state — they explain the options, you decide.",
 };
 
 export default function RootLayout({

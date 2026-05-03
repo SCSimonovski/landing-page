@@ -18,16 +18,16 @@ export default function TermsPage() {
       <main className="mx-auto max-w-3xl px-6 py-14 sm:py-20">
         <div
           role="alert"
-          className="mb-10 rounded-2xl border border-accent-burgundy/30 bg-background-card p-5 text-sm text-foreground-soft"
+          className="mb-10 rounded-2xl border border-accent-terracotta/30 bg-background-card p-5 text-sm text-foreground-soft"
         >
-          <strong className="text-accent-burgundy">DRAFT — pending TCPA-experienced attorney review.</strong>{" "}
+          <strong className="text-accent-terracotta">DRAFT — pending TCPA-experienced attorney review.</strong>{" "}
           Not legal advice. The text below is structurally complete placeholder content; specifics in
           [BRACKETED MARKERS] must be filled by counsel before launch.
         </div>
 
         <h1 className="font-sans font-medium text-[40px] sm:text-[56px] leading-[1.0] tracking-[-0.035em] text-foreground">
           Terms of{" "}
-          <em className="font-serif italic font-normal text-accent-burgundy-deep">
+          <em className="font-serif italic font-normal text-accent-terracotta-deep">
             Service.
           </em>
         </h1>

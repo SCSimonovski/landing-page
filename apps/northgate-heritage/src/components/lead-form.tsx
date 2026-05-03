@@ -149,7 +149,7 @@ export function LeadForm() {
     <form
       onSubmit={handleSubmit(onSubmit)}
       noValidate
-      className="rounded-[20px] border border-border bg-background-card p-6 sm:p-9 shadow-[0_1px_0_rgba(42,31,24,0.04),0_24px_60px_-28px_rgba(42,31,24,0.18)]"
+      className="rounded-[20px] border border-border bg-background-card p-6 sm:p-9 shadow-[0_1px_0_rgba(20,37,58,0.04),0_24px_60px_-28px_rgba(20,37,58,0.18)]"
       aria-label="Final expense lead form"
     >
       {/* Hidden bot trap. Off-screen, not focusable, ignored by AT. */}
@@ -170,7 +170,7 @@ export function LeadForm() {
       <input type="hidden" {...register("form_loaded_at", { valueAsNumber: true })} />
 
       <p
-        className="mb-5 text-xs font-medium tracking-[0.02em] text-accent-burgundy-deep"
+        className="mb-5 text-xs font-semibold tracking-[0.18em] uppercase text-accent-terracotta"
         aria-live="polite"
       >
         Step {step + 1} / {TOTAL_STEPS}
@@ -187,7 +187,7 @@ export function LeadForm() {
           <span
             key={i}
             className={`flex-1 h-[5px] rounded-full transition-colors ${
-              i <= step ? "bg-accent-burgundy" : "bg-foreground/10"
+              i <= step ? "bg-accent-terracotta" : "bg-foreground/10"
             }`}
           />
         ))}
@@ -215,7 +215,7 @@ export function LeadForm() {
             min={5_000}
             max={50_000}
             step={1_000}
-            className="mt-5 w-full accent-[var(--accent-burgundy)]"
+            className="mt-5 w-full accent-[var(--accent-terracotta)]"
             aria-label="Desired coverage"
             {...register("desired_coverage", { valueAsNumber: true })}
           />

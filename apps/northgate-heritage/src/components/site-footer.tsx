@@ -2,9 +2,9 @@ import Image from "next/image";
 
 export function SiteFooter() {
   return (
-    <footer className="bg-accent text-background-card px-6 py-12 sm:py-20">
+    <footer className="bg-background-deep text-background-card px-6 py-14 sm:py-20">
       <div className="mx-auto max-w-6xl">
-        <div className="flex flex-col gap-7 sm:flex-row sm:items-start sm:justify-between border-b border-background-card/10 pb-7">
+        <div className="flex flex-col gap-7 sm:flex-row sm:items-start sm:justify-between border-b border-background-card/12 pb-7">
           <div>
             <Image
               src="/heritage-logo-horizontal-dark.svg"
@@ -19,7 +19,7 @@ export function SiteFooter() {
           </div>
           <nav
             aria-label="Footer"
-            className="flex gap-5 sm:gap-7 text-[13.5px] font-medium"
+            className="flex gap-6 sm:gap-7 text-[13.5px] font-medium"
           >
             <a
               href="/privacy"

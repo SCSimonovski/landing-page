@@ -1,24 +1,17 @@
 @import "tailwindcss";
 
-/*
- * Hearth direction (placeholder palette — final values from user's
- * design screenshots per AGENTS.md § 9). Warm cream base + burgundy
- * + gold accents to visually distinguish from Meridian's sage/coral.
- * Hearth = legacy/family/home-warmth framing.
- */
 :root {
-  --background: #F4ECDB;
-  --background-deep: #E8DCC0;
-  --background-card: #FBF6EA;
-  --foreground: #2A1F18;
-  --foreground-soft: #4A3A2D;
-  --muted: #7A6A52;
-  --accent: #2A1F18;
-  --accent-hover: #4A3A2D;
-  --accent-burgundy: #7A3E36;
-  --accent-burgundy-deep: #5C2D26;
-  --accent-gold: #B8845F;
-  --border: #D4C4A8;
+  --background: #EBE0CE;
+  --background-deep: #14253A;
+  --background-card: #F4ECDB;
+  --foreground: #14253A;
+  --foreground-soft: #3D4D62;
+  --muted: #5F6E80;
+  --accent: #14253A;
+  --accent-hover: #0E1B2A;
+  --accent-terracotta: #B85541;
+  --accent-terracotta-deep: #9C4636;
+  --border: #D4C7AC;
 }
 
 @theme inline {
@@ -30,9 +23,8 @@
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
-  --color-accent-burgundy: var(--accent-burgundy);
-  --color-accent-burgundy-deep: var(--accent-burgundy-deep);
-  --color-accent-gold: var(--accent-gold);
+  --color-accent-terracotta: var(--accent-terracotta);
+  --color-accent-terracotta-deep: var(--accent-terracotta-deep);
   --color-border: var(--border);
   --font-sans: var(--font-geist);
   --font-serif: var(--font-fraunces);

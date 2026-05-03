@@ -3,18 +3,14 @@ import { LeadForm } from "@/components/lead-form";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 
-// Compliance checkpoint per playbook 02 § 2.3 — copy below has been
-// reviewed against the forbidden list:
-//   ✓ No specific dollar amounts in marketing copy (coverage range stays
-//     in the form fieldset, not the hero or chips)
+// Compliance checkpoint per playbook 02 § 2.3 — copy reviewed against the
+// forbidden list:
+//   ✓ No specific dollar amounts in marketing copy
 //   ✓ No fabricated testimonials
 //   ✓ No fear imagery (hospital beds, funerals, crying children)
-//   ✓ No false urgency ("limited time," "before it's too late," etc.)
-//   ✓ No "guaranteed approval" or eligibility claims
+//   ✓ No false urgency
+//   ✓ No "guaranteed approval" claims
 //   ✓ No specific premium quotes
-// FE products attract these tropes; this page intentionally stays in the
-// "calm, plain-language, family-warmth" register that Hearth direction
-// is built around.
 const CHIPS = [
   "Licensed agents",
   "No obligation",
@@ -83,153 +79,127 @@ const FAQ = [
 const STEPS = [
   {
     title: "Tell us a few basics",
-    detail: "Six short questions. Coverage, age, state, the basics.",
-    bg: "bg-accent-burgundy",
+    detail: "Six short questions. Coverage, age, beneficiary, the basics.",
   },
   {
     title: "We match you with an agent",
     detail: "A licensed agent in your state — not a call center.",
-    bg: "bg-accent-gold",
   },
   {
     title: "They reach out",
     detail: "By phone or text, at the time you said worked best.",
-    bg: "bg-accent",
   },
 ];
-
-function Checkmark() {
-  return (
-    <svg
-      width="11"
-      height="11"
-      viewBox="0 0 12 12"
-      aria-hidden="true"
-      className="flex-shrink-0"
-    >
-      <path
-        d="M2.5 6.5 L5 9 L9.5 3.5"
-        stroke="#5C2D26"
-        strokeWidth="1.6"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
 
 export default function Home() {
   return (
     <>
       <SiteHeader />
       <main className="flex flex-col">
-        {/* HERO */}
+        {/* HERO — on lg+ fills the viewport minus the top compliance band
+            (~28px) + sticky header (h-20 = 80px) so the section + header
+            together equal 100vh exactly. lg:flex + items-center handles
+            vertical centering of the content. */}
         <section
           aria-labelledby="hero-heading"
-          className="relative px-6 pt-7 pb-16 sm:pt-24 sm:pb-28"
+          className="px-6 pt-10 pb-20 sm:pt-20 sm:pb-28 lg:flex lg:items-center lg:min-h-[calc(100vh-108px)]"
         >
-          <div className="relative mx-auto max-w-6xl grid gap-10 lg:grid-cols-[1.1fr_1fr] lg:gap-16 lg:items-center">
-            <div className="max-w-[640px]">
-              <div className="inline-flex items-center gap-2.5 rounded-full bg-background-card border border-border px-3.5 py-2 text-[12.5px] font-medium text-accent-burgundy-deep mb-6 sm:mb-8">
-                <span
-                  aria-hidden="true"
-                  className="inline-block h-1.5 w-1.5 rounded-full bg-accent-gold"
-                />
-                An independent service for families
-              </div>
+          <div className="mx-auto w-full max-w-6xl grid gap-12 lg:grid-cols-[1.15fr_1fr] lg:gap-16 lg:items-center">
+            <div className="max-w-[560px]">
+              <p className="flex items-center gap-3 text-[12px] font-medium tracking-[0.16em] uppercase text-foreground mb-7 sm:mb-9">
+                <span aria-hidden="true" className="inline-block h-px w-7 bg-accent-terracotta" />
+                <span className="">Final Expense · For Families</span>
+              </p>
 
               <h1
                 id="hero-heading"
-                className="font-sans font-medium text-[44px] sm:text-[80px] leading-[1.0] tracking-[-0.04em] text-foreground"
+                className="font-serif font-normal text-[48px] sm:text-[80px] leading-[1.0] tracking-[-0.02em] text-foreground"
               >
-                Take care of
+                What you leave
                 <br />
-                what comes
-                <br />
-                <em className="font-serif italic font-normal text-accent-burgundy-deep tracking-[-0.025em]">
-                  next.
+                them,{" "}
+                <em className="italic font-normal text-accent-terracotta">
+                  settled.
                 </em>
               </h1>
 
-              <p className="mt-5 sm:mt-8 text-[17px] sm:text-[21px] leading-[1.5] tracking-[-0.005em] text-foreground-soft max-w-[520px]">
-                We&apos;re a small service that connects families with one licensed insurance agent in their state. We don&apos;t sell policies. We don&apos;t keep your information. We don&apos;t pretend to be the agent.
+              <p className="mt-6 sm:mt-8 text-[16.5px] sm:text-[18px] leading-[1.55] tracking-[-0.005em] text-foreground-soft max-w-[460px]">
+                Coverage that takes care of the bills your family shouldn&apos;t have to. We connect you with one licensed agent in your state — they explain the options, you decide.
               </p>
 
-              <div className="mt-7 sm:mt-10 flex flex-wrap items-center gap-3.5">
+              <div className="mt-7 sm:mt-9 flex flex-wrap items-center gap-4">
                 <a
                   href="#lead-form"
-                  className="inline-flex min-h-[52px] items-center gap-2.5 rounded-full bg-accent px-7 py-4 text-[15.5px] font-medium tracking-[-0.005em] text-background-card hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  className="inline-flex min-h-[52px] items-center gap-2.5 rounded-full bg-accent-terracotta px-7 py-4 text-[15px] font-medium tracking-[-0.005em] text-background-card hover:bg-accent-terracotta-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-terracotta"
                 >
                   Start my quote
-                  <span
-                    aria-hidden="true"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent-gold text-[13px] text-background-card"
-                  >
-                    →
-                  </span>
+                  <span aria-hidden="true">→</span>
                 </a>
-                <span className="text-[13.5px] text-muted">
+                <span className="text-[13px] text-muted">
                   About 60 seconds · No obligation
                 </span>
               </div>
 
-              <ul className="mt-8 sm:mt-12 flex flex-wrap gap-2 sm:gap-2.5">
-                {CHIPS.map((chip) => (
-                  <li
-                    key={chip}
-                    className="inline-flex items-center gap-2 rounded-full bg-background-card border border-border px-3.5 py-2 text-[13px] font-medium tracking-[-0.005em] text-foreground-soft"
-                  >
-                    <Checkmark />
-                    {chip}
-                  </li>
-                ))}
-              </ul>
+              <div className="mt-10 sm:mt-14 border-t border-border pt-6">
+                <ul className="flex flex-wrap gap-x-6 gap-y-2.5 text-[13px] font-medium text-foreground-soft">
+                  {CHIPS.map((chip) => (
+                    <li key={chip} className="inline-flex items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className="inline-block h-1.5 w-1.5 rounded-full bg-accent-terracotta"
+                      />
+                      {chip}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
 
-            <div className="hidden lg:block">
+            <div className="relative pb-10 sm:pb-0 sm:pl-4">
               <HeritageHero />
             </div>
           </div>
         </section>
 
-        {/* HOW IT WORKS */}
+        {/* HOW IT WORKS — dark navy band */}
         <section
           id="how"
           aria-labelledby="how-heading"
-          className="bg-background-deep px-6 py-16 sm:py-28"
+          className="bg-background-deep text-background-card px-6 py-20 sm:py-28"
         >
-          <div className="mx-auto max-w-6xl grid gap-8 lg:grid-cols-[1fr_2fr] lg:gap-20 lg:items-start">
+          <div className="mx-auto max-w-6xl grid gap-12 lg:grid-cols-[1fr_1.6fr] lg:gap-20 lg:items-start">
             <div>
-              <p className="text-[12.5px] font-medium tracking-[0.06em] uppercase text-accent-burgundy-deep mb-4">
+              <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-accent-terracotta mb-4">
                 How it works
               </p>
               <h2
                 id="how-heading"
-                className="font-sans font-medium text-[34px] sm:text-[48px] leading-[1.0] tracking-[-0.03em] text-foreground"
+                className="font-serif font-normal text-[40px] sm:text-[56px] leading-[1.0] tracking-[-0.02em]"
               >
-                Three steps,{" "}
-                <em className="font-serif italic font-normal text-accent-burgundy-deep">
-                  that&apos;s it.
+                Three steps.
+                <br />
+                <em className="italic font-normal text-accent-terracotta">
+                  That&apos;s all.
                 </em>
               </h2>
             </div>
-            <ol className="flex flex-col gap-5">
+            <ol className="flex flex-col">
               {STEPS.map((step, i) => (
                 <li
                   key={step.title}
-                  className="flex items-start gap-4 sm:gap-6 rounded-[1.125rem] border border-border bg-background-card p-6 sm:p-7"
+                  className="grid grid-cols-[auto_1fr] gap-x-6 sm:gap-x-10 items-baseline border-b border-background-card/12 last:border-b-0 py-7 sm:py-8 first:pt-0"
                 >
-                  <div
-                    className={`flex h-11 w-11 sm:h-14 sm:w-14 flex-shrink-0 items-center justify-center rounded-full ${step.bg} text-background-card font-serif italic font-normal text-xl sm:text-2xl`}
+                  <span
+                    aria-hidden="true"
+                    className="font-serif italic font-normal text-[28px] sm:text-[34px] leading-none text-accent-terracotta"
                   >
-                    {i + 1}
-                  </div>
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
                   <div>
-                    <p className="font-medium text-[19px] sm:text-[22px] tracking-[-0.015em] text-foreground mb-2">
+                    <p className="font-sans font-medium text-[19px] sm:text-[22px] tracking-[-0.015em] mb-1.5">
                       {step.title}
                     </p>
-                    <p className="text-[14.5px] leading-[1.6] text-muted">
+                    <p className="text-[14px] sm:text-[15px] leading-[1.55] text-background-card/70">
                       {step.detail}
                     </p>
                   </div>
@@ -243,24 +213,24 @@ export default function Home() {
         <section
           id="lead-form"
           aria-labelledby="form-heading"
-          className="px-6 py-16 sm:py-28"
+          className="px-6 py-20 sm:py-28"
         >
-          <div className="mx-auto max-w-6xl grid gap-8 lg:grid-cols-[1fr_1.1fr] lg:gap-20 lg:items-center">
+          <div className="mx-auto max-w-6xl grid gap-10 lg:grid-cols-[1fr_1.1fr] lg:gap-20 lg:items-center">
             <div>
-              <p className="text-[12.5px] font-medium tracking-[0.06em] uppercase text-accent-burgundy-deep mb-4">
+              <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-accent-terracotta mb-4">
                 Start your quote
               </p>
               <h2
                 id="form-heading"
-                className="font-sans font-medium text-[36px] sm:text-[56px] leading-[1.0] tracking-[-0.035em] text-foreground mb-5"
+                className="font-serif font-normal text-[40px] sm:text-[56px] leading-[1.0] tracking-[-0.02em] text-foreground mb-5"
               >
                 Six questions.
                 <br />
-                <em className="font-serif italic font-normal text-accent-burgundy-deep">
+                <em className="italic font-normal text-accent-terracotta">
                   One agent.
                 </em>
               </h2>
-              <p className="text-[16.5px] leading-[1.55] text-muted max-w-[380px]">
+              <p className="text-[16px] leading-[1.55] text-foreground-soft max-w-[400px]">
                 Tell us a few basics about your situation. We&apos;ll match you with one licensed agent in your state — no aggregators, no third parties.
               </p>
             </div>
@@ -268,38 +238,35 @@ export default function Home() {
           </div>
         </section>
 
-        {/* PROMISES */}
+        {/* PROMISES — dark navy band */}
         <section
           aria-labelledby="promises-heading"
-          className="bg-foreground text-background-card px-6 py-16 sm:py-28"
+          className="bg-background-deep text-background-card px-6 py-20 sm:py-28"
         >
           <div className="mx-auto max-w-6xl">
-            <p className="text-[12.5px] font-medium tracking-[0.06em] uppercase text-accent-gold mb-4">
+            <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-accent-terracotta mb-4">
               What you can count on
             </p>
             <h2
               id="promises-heading"
-              className="font-sans font-medium text-[32px] sm:text-[48px] leading-[1.05] tracking-[-0.03em] mb-9 sm:mb-14 max-w-[720px]"
+              className="font-serif font-normal text-[36px] sm:text-[52px] leading-[1.0] tracking-[-0.02em] mb-10 sm:mb-14 max-w-[760px]"
             >
               The promises — and what we{" "}
-              <em className="font-serif italic font-normal text-accent-gold">
+              <em className="italic font-normal text-accent-terracotta">
                 won&apos;t
               </em>{" "}
               do.
             </h2>
-            <ul role="list" className="grid gap-3.5 sm:gap-5 sm:grid-cols-3">
+            <ul role="list" className="grid gap-6 sm:gap-x-10 sm:gap-y-9 sm:grid-cols-3">
               {PROMISES.map((p, i) => (
-                <li
-                  key={p.title}
-                  className="rounded-[1.125rem] border border-background-card/10 bg-background-card/[0.05] p-6 sm:p-7"
-                >
-                  <p className="text-[11px] uppercase tracking-[0.08em] text-background-card/50 mb-3.5">
+                <li key={p.title} className="border-t border-background-card/15 pt-5">
+                  <p className="font-serif italic font-normal text-[18px] text-accent-terracotta mb-3">
                     {String(i + 1).padStart(2, "0")}
                   </p>
-                  <p className="font-medium text-[19px] sm:text-[21px] tracking-[-0.015em] mb-2.5 leading-[1.2]">
+                  <p className="font-sans font-medium text-[19px] sm:text-[20px] tracking-[-0.015em] mb-2">
                     {p.title}
                   </p>
-                  <p className="text-[14px] leading-[1.55] text-background-card/75">
+                  <p className="text-[14px] leading-[1.6] text-background-card/72">
                     {p.detail}
                   </p>
                 </li>
@@ -312,37 +279,37 @@ export default function Home() {
         <section
           id="faq"
           aria-labelledby="faq-heading"
-          className="bg-background-deep px-6 py-16 sm:py-28"
+          className="px-6 py-20 sm:py-28"
         >
           <div className="mx-auto max-w-[880px]">
-            <p className="text-[12.5px] font-medium tracking-[0.06em] uppercase text-accent-burgundy-deep mb-4">
+            <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-accent-terracotta mb-4">
               Frequently asked
             </p>
             <h2
               id="faq-heading"
-              className="font-sans font-medium text-[32px] sm:text-[44px] leading-[1.05] tracking-[-0.03em] text-foreground mb-7 sm:mb-10"
+              className="font-serif font-normal text-[36px] sm:text-[48px] leading-[1.0] tracking-[-0.02em] text-foreground mb-9 sm:mb-12"
             >
               Common questions.
             </h2>
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col">
               {FAQ.map((item, i) => (
                 <details
                   key={item.q}
                   open={i === 0}
-                  className="group rounded-[0.875rem] border border-border bg-background-card p-5 sm:p-6"
+                  className="group border-b border-border py-5 last:border-b-0"
                 >
                   <summary className="flex cursor-pointer items-center justify-between gap-4 list-none min-h-11">
-                    <span className="font-medium text-[16px] sm:text-[18px] tracking-[-0.01em] text-foreground">
+                    <span className="font-sans font-medium text-[16px] sm:text-[18px] tracking-[-0.01em] text-foreground">
                       {item.q}
                     </span>
                     <span
                       aria-hidden="true"
-                      className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-background text-accent-burgundy-deep text-sm transition-transform group-open:rotate-45"
+                      className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center text-accent-terracotta text-lg transition-transform group-open:rotate-45"
                     >
                       +
                     </span>
                   </summary>
-                  <p className="mt-3.5 text-[14.5px] leading-[1.65] text-muted max-w-[720px]">
+                  <p className="mt-3 text-[14.5px] leading-[1.65] text-muted max-w-[720px]">
                     {item.a}
                   </p>
                 </details>
