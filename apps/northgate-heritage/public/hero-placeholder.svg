@@ -1,0 +1,19 @@
+<!--
+  HERO PLACEHOLDER — Hearth direction expects real photography per AGENTS.md § 9.
+  This is a FIRM SAC blocker before any paid Heritage ad runs.
+  Watching dev/preview only; production banner gated by NEXT_PUBLIC_HERO_PLACEHOLDER.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <pattern id="diagonalStripes" patternUnits="userSpaceOnUse" width="24" height="24" patternTransform="rotate(45)">
+      <rect width="12" height="24" fill="#EDE0D0"/>
+      <rect x="12" width="12" height="24" fill="#E2D2BB"/>
+    </pattern>
+  </defs>
+  <rect width="800" height="600" fill="url(#diagonalStripes)"/>
+  <g transform="translate(400, 280)" text-anchor="middle">
+    <text y="0" style="font-family: Georgia, 'Times New Roman', serif; font-size: 28px; font-weight: 500; fill: #7A3E36; letter-spacing: 0.18em;">PLACEHOLDER</text>
+    <text y="38" style="font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 14px; fill: #4F3E32; letter-spacing: 0.06em;">Real Hearth-direction photography pending</text>
+    <text y="62" style="font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; fill: #6F5C4A; letter-spacing: 0.06em;">See AGENTS.md § 9 — firm SAC blocker</text>
+  </g>
+</svg>

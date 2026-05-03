@@ -4,6 +4,113 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-05-03 — Scaffold apps/northgate-heritage (Plan 2b — Final Expense sibling brand)
+
+Plan 2b of the second-brand sequence per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. **Heritage app scaffolded as a sibling Next.js app** (`apps/northgate-heritage/`) sharing infrastructure via `@platform/shared` but with its own UI, copy, env, and (forthcoming) Vercel project. The 4 placeholder files Plan 2a left at `packages/shared/{validation/details, twilio/templates, email/templates}/final_expense.ts` were populated with real implementations. NP unchanged at runtime (only NP-touching change is dev-script port pin from `next dev` to `next dev --port 3000` for symmetric explicitness with Heritage's `--port 3001`).
+
+**Heritage app structure** (`apps/northgate-heritage/`):
+- Chassis files mirror NP exactly (eslint, tsconfig, next.config, postcss, package.json, vercel.json). Pinned region `iad1`. `pnpm dev --port 3001` so both apps run simultaneously with deterministic ports.
+- Per-app library at `apps/northgate-heritage/src/lib/`:
+  - `consent.ts` — Heritage CONSENT_TEXT diverges from NP at the product mention only ("mortgage protection insurance" → "final expense insurance"). Same `v1-draft` form version as NP (both bump together at attorney pass). Module-load assertion enforces LINKED_CONSENT_SUFFIX matching.
+  - `intent.ts` — FE-specific scoring per Plan 2b Decision #3 (age + coverage primary, health secondary). Age 60-75 = 35pts (FE peak market), 50-59 = 25, 76-85 = 20. Coverage tiers $25k+/15k+/10k+ = 25/20/15. No major conditions = 15. Non-smoker = 10. Phone+email = 5. Total /90, same temperature thresholds as NP (`hot ≥70 / warm ≥50 / cold <50`) for cross-brand comparability.
+  - `validation/lead-schema.ts` — Heritage form schema. 4 product fields (`desired_coverage` $5k-$50k, `is_smoker`, `has_major_health_conditions`, `beneficiary_relationship` enum spouse|child|parent|other) + chassis (age 50-85 narrower than NP's 18-75 — soft FE eligibility filter). Imports primitives from `@platform/shared/validation/common`.
+- Pages + chrome at `apps/northgate-heritage/src/`:
+  - `app/globals.css` — Hearth color tokens (warm cream + burgundy/gold palette) replacing Meridian's sage/coral. Final values from user's design screenshots; current scaffold uses sensible warm-direction defaults.
+  - `app/layout.tsx` — Heritage metadata (title: "Northgate Heritage — Final Expense Insurance Quotes").
+  - `app/page.tsx` — Hearth-direction landing page with FE-product CHIPS / PROMISES / FAQ (7 entries; first one defines what FE is) / STEPS. **Compliance checkpoint applied:** copy reviewed against playbook 02 § 2.3 forbidden list (no specific dollar amounts in marketing copy, no fabricated testimonials, no fear imagery, no false urgency, no "guaranteed approval" claims, no specific premium quotes). FE products attract these tropes; the page intentionally stays in the "calm, plain-language, family-warmth" register that Hearth direction is built around.
+  - `app/privacy/page.tsx` + `terms/page.tsx` — clones of NP's draft with brand + product mentions swapped (yellow-banner draft posture stays; same `[BRAND NAME PLACEHOLDER]` / `[LLC NAME]` / `[REGISTERED ADDRESS]` markers).
+  - `components/site-header.tsx` + `site-footer.tsx` — copies of NP's, adapted for Heritage logo + LLC string + opt-out email (`hello@northgateheritage.com`).
+  - `components/lead-form.tsx` — 6-step form, no homeowner gate (FE eligibility is age-based, validated by schema). FE-specific steps: coverage slider, age + smoker, major-health + beneficiary, state + names, contact + best time, consent.
+  - `components/heritage-hero.tsx` — placeholder image renderer with dev-only banner gated on `NEXT_PUBLIC_HERO_PLACEHOLDER`. Real Hearth photography is a firm SAC blocker per AGENTS.md § 9.
+- API routes at `apps/northgate-heritage/src/app/api/`:
+  - `health/route.ts` — verbatim copy of NP's. Header-based secret check + lenient rate limit.
+  - `leads/route.ts` — clone of NP's with hardcoded `brand: 'northgate-heritage'`, `product: 'final_expense'`, and `details: { desired_coverage, is_smoker, has_major_health_conditions, beneficiary_relationship }`. Uses Heritage's per-app `computeIntentScore` (FE-shaped). Cross-brand suppression check, DNC check, 30-day duplicate enforcement preserved (a phone that came in via NP within 30 days dedupes here too — `recordDuplicateAttempt` payload now includes `attempted_brand` for cross-brand audit).
+  - `twilio/incoming/route.ts` — clone of NP's with `source_brand: 'northgate-heritage'`. Dormant infrastructure today — Heritage shares NP's Twilio number, so Heritage STOPs land on NP's webhook. This handler exists ready to receive once Heritage gets its own Twilio number (gates on second A2P 10DLC paperwork).
+- Public assets:
+  - `public/heritage-logo.svg` + `heritage-logo-horizontal-{light,dark}.svg` — placeholder Hearth logos using a triangle/hearth mark + warm burgundy/gold tones to visually distinguish from NP's arch + sage/coral. PLACEHOLDER comments at top of each SVG.
+  - `public/hero-placeholder.svg` — diagonal-stripe placeholder with explicit "PLACEHOLDER" text. Renders behind the dev-only banner.
+  - `src/app/favicon.ico` — copy of NP's for now (user can swap when Heritage favicon exists).
+
+**Plan 2a placeholder population** (4 files):
+- `packages/shared/validation/details/final_expense.ts` — `z.object({}).passthrough()` placeholder replaced with real `FinalExpenseDetailsSchema` (4 fields per Heritage's qualifying set). `FinalExpenseDetails` re-export in `packages/shared/types/products.ts` becomes meaningful (already wired via `z.infer<>` in Plan 2a).
+- `packages/shared/twilio/templates/final_expense.ts` — throw-placeholder replaced with `formatFinalExpenseSMS`. **`FE LEAD` line-1 prefix** mirrors Plan 2a's `MP LEAD` for symmetry. SMS body lines: lead name + age, state + coverage, health summary (`MAJOR conditions` vs `no major` · smoker/non-smoker), beneficiary, call number, score/90, best time. Same `toLocaleString("en-US")` pattern for the coverage number to avoid the locale-mismatch hydration bug.
+- `packages/shared/email/templates/final_expense.ts` — throw-placeholder replaced with `renderFinalExpenseWelcomeEmail`. Mirrors MP's structure (plain text, similar length, `[AGENT NAME PLACEHOLDER]` + `[BRAND NAME PLACEHOLDER]` markers). Subject: "Your final expense quote is on its way, {firstName}".
+- `packages/shared/types/products.ts` — no edit needed; the `z.infer<>` re-export Plan 2a wired in becomes meaningful automatically.
+
+**Operational changes:**
+- New env var `NEXT_PUBLIC_HERO_PLACEHOLDER` (gates Heritage hero placeholder banner). 5-place rule first exercise: landed in root `.env.local` + NP `.env.local` + Heritage `.env.local` (parity for `pnpm verify-envs`); Vercel-side will land when each project's dashboard is updated.
+- Heritage's `HEALTH_CHECK_SECRET` rotated fresh — never reused from NP (cross-project secret reuse trivially leaks if either is compromised). All other Heritage env values match NP per Plan 2b decisions (Supabase + Twilio + Resend + Upstash + Meta + AGENT_PHONE_NUMBER).
+- NP's `package.json` `dev` script changed from `next dev` to `next dev --port 3000` for explicit port pinning (symmetric with Heritage's `--port 3001`). Both apps can run simultaneously with deterministic port assignment. Build script unchanged.
+- `pnpm verify-envs` now reports 3 locations × 18 keys (was 2 × 17 in Plan 2a).
+
+**Decisions locked** (from the plan + 3 user-confirmed business decisions):
+- Heritage app directory: `apps/northgate-heritage/` (sibling to NP).
+- FE qualifying field set: lean 5-field set (Plan 2b Decision #2).
+- FE intent score model: age + coverage primary, health secondary, /90 scale (Decision #3).
+- Heritage Twilio number: reuse NP's; attribution gap documented; second number deferred (Decision #4).
+- Per-app chrome copies (`<SiteHeader>`, `<SiteFooter>`, `<LeadForm>`) — re-evaluate after both brands ship + see one design feedback round.
+- FE SMS template line-1 prefix: `🔥 NEW HOT FE LEAD` (mirrors `MP LEAD`).
+- Heritage CONSENT_TEXT: NP's draft with "mortgage protection insurance" → "final expense insurance"; `v1-draft` form version stays for both brands until joint attorney pass.
+- Heritage hero treatment: placeholder + dev-only banner; real photography firm SAC blocker.
+- Heritage age range 50-85 (vs NP's 18-75) — soft FE eligibility filter via the chassis age field's Zod min/max.
+- Heritage `is_homeowner` gate: NONE.
+- Heritage `AGENT_PHONE_NUMBER`: SAME as NP per Phase 1 one-agent commitment (Decision #11).
+- Local dev port pinning: Heritage on `--port 3001`, NP on `--port 3000`, both pinned explicitly (Decision #12).
+- New env var `NEXT_PUBLIC_HERO_PLACEHOLDER` gates Heritage hero banner (Decision #13).
+- NP bundle byte-length post-Plan-2b expected to grow because `@platform/shared` now contains real FE template + schema code (Decision #14). Not a regression.
+- `computeTemperature` per-app duplication considered, deferred (4-line function, no abstraction debt). Don't propose extracting it as new work without reading why duplication was chosen.
+
+**Verification — all PASS:**
+- **Lint:** Heritage clean (1 RHF warning matching NP's pre-existing pattern, 0 errors). NP clean (same as Plan 2a post-state).
+- **Build:** Heritage clean. Route table mirrors NP exactly: 4 static (`/`, `/_not-found`, `/privacy`, `/terms`) + 3 dynamic (`/api/health`, `/api/leads`, `/api/twilio/incoming`). NP build clean (route table identical to Plan 2a post-state).
+- **`pnpm verify-envs`:** clean — 3 locations × 18 keys, all match.
+- **Negative-path test (`scripts/test-format-agent-sms-assertion.ts`)**: rewritten as the Plan 2b dispatcher-aware version. **5 cases / 8 assertions, all PASS:**
+  - Case 1 (valid MP): SMS body byte-identical to expected MP template + `MP LEAD` prefix on line 1.
+  - Case 2 (bad-shape MP): throws via MP Zod, error contains lead.id + `mortgage_protection`.
+  - Case 3 (valid FE — NEW post-2b): SMS body byte-identical to expected FE template + `FE LEAD` prefix on line 1. **Load-bearing FE-template proof.**
+  - Case 4 (bad-shape FE — NEW): throws via FE Zod, error contains lead.id + `final_expense`.
+  - Case 5 (unknown product): throws at dispatcher (not template), error contains `auto_insurance` + `formatAgentSMS`.
+- **NP regression byte-identity scope (per architect-required clarification):** runtime outputs and DB row shapes are byte-identical to Plan 2a's post-state — `intent_score=80`, `temperature=hot`, SMS body still starts `🔥 NEW HOT MP LEAD`, `consent_text` byte-identical, lead/consent_log/lead_events row shapes unchanged. **Bundle byte-length intentionally not in the parity scope** — `@platform/shared` grew because Plan 2a's ~10-line FE placeholders are now real implementations; NP's runtime never executes the FE branch but the FE code ships in the same bundle. Bundle delta acceptable, flagged not regression.
+
+**Hero placeholder gate (production safety check):**
+- Local dev with `NEXT_PUBLIC_HERO_PLACEHOLDER=true` → banner renders (✓ verified visually in next dev).
+- Production build with `NEXT_PUBLIC_HERO_PLACEHOLDER` UNSET → banner does NOT render. The browser-side env var is bundled at build time, so the production build with the var unset is the actual safety check. Heritage's `.env.local` ships with `=true`; Heritage's Vercel project will have it UNSET in production env (per the Vercel checklist below).
+
+**Heritage Vercel project setup checklist** (user-side ops, deferred to user execution):
+
+1. Vercel dashboard → Add New → Project → import from GitHub (existing repo, SCSimonovski/landing-page).
+2. Project name: `northgate-heritage` (matches the apps/ subdirectory).
+3. Framework Preset: Next.js (auto-detected).
+4. Root Directory: `apps/northgate-heritage`.
+5. Build Command: leave default (Vercel detects pnpm workspaces) OR set explicitly to `cd ../.. && pnpm install --frozen-lockfile && pnpm --filter northgate-heritage build`.
+6. Output Directory: leave default (`.next`).
+7. Install Command: leave Vercel's default (`pnpm install --frozen-lockfile`).
+8. Environment Variables: copy from NP's project, paste here. 18 keys total (matches `pnpm verify-envs` count). Notes:
+   - Supabase keys: SAME as NP (shared `mpl-dev` project).
+   - Twilio (account_sid + auth_token + from_number): SAME as NP per Decision #4.
+   - Resend, Upstash: SAME.
+   - `AGENT_PHONE_NUMBER`: SAME as NP per Decision #11.
+   - Meta keys: empty for now (Pixel install hasn't shipped — next-task slot).
+   - `HEALTH_CHECK_SECRET`: ROTATE FRESH — DO NOT reuse NP's. Use `node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"` to generate.
+   - `NEXT_PUBLIC_SITE_URL`: set to `https://northgateheritage.vercel.app` (after step 9).
+   - `NEXT_PUBLIC_HERO_PLACEHOLDER`: **leave UNSET in production env.** Setting it would render the placeholder banner in prod ads (firm SAC blocker safety check).
+9. Deploy. Auto-generated slug appears (e.g., `northgate-heritage-abc123.vercel.app`). Rename in Project Settings → Domains to: `northgateheritage.vercel.app`.
+10. Update `NEXT_PUBLIC_SITE_URL` env to the renamed URL. Trigger a redeploy (Vercel does NOT auto-redeploy on env-var changes).
+11. Twilio dashboard: confirm STOP webhook still points at NP's URL. Heritage doesn't need its own STOP webhook because Heritage shares NP's number — STOPs hit NP's handler regardless of which brand sent the SMS. Documented attribution gap stands.
+12. Verify deploy: `curl -H "x-health-secret: <HERITAGE_HEALTH_CHECK_SECRET>" https://northgateheritage.vercel.app/api/health` → expect `{"ok":true}`.
+
+**Live submission verification (deferred to user when convenient):** the load-bearing FE template proofs are mechanical (byte-identity in the negative-path test). A live FE submission via `pnpm --filter northgate-heritage dev` (port 3001) confirms the full intake → DB → dispatch chain works end-to-end with `brand='northgate-heritage'`, `product='final_expense'`, FE-shaped `details` JSONB, and the FE intent score model. Deterministic test inputs: age=65, desired_coverage=$15k, is_smoker=false, has_major_health_conditions=false, beneficiary_relationship=spouse, state=TX, best_time_to_call=morning → expected `intent_score=85` (35 + 20 + 15 + 10 + 5), `temperature=hot`, SMS body starts `🔥 NEW HOT FE LEAD`. Outbound SMS still A2P-blocked at the carrier (same gate as NP).
+
+**Out-of-band notes (carryovers + Plan 2c surfacings):**
+- **`computeTemperature` shared promotion considered, deferred.** Both NP's and Heritage's `computeTemperature` are 4 lines, identical. Could be promoted to `@platform/shared/utils/temperature.ts` if a third use site lands. Don't propose extracting as new work without reading this why.
+- **Heritage age range 50-85.** Real form-validation difference vs NP's 18-75. Acceptable for engineering verification; if Heritage ever goes commercial, a "you don't qualify yet, here's a calendar reminder for when you turn 50" flow might be worth adding. Out of scope for Phase 1.
+- **Operational reality post-Plan-2b:** adding any new env var (e.g., a future `META_PIXEL_ID` for Heritage) is now a 5-place change (root + 2 apps' `.env.local` + 2 Vercel project dashboards). `pnpm verify-envs` catches local-side drift; Vercel-side stays manual.
+- **Plan 2c possibility (don't bundle into Plan 2b's PR):** if real-world Heritage operation surfaces structural decisions worth pinning (shared chrome extraction once both brands stabilize, intent.ts parameterization, computeTemperature promotion), capture as a Plan 2c proposal in CHANGELOG carryover. Don't refactor Plan 2b retroactively.
+
+**Heritage hero photography blocker:** firm SAC blocker. Heritage cannot run paid ads with the placeholder banner rendering. Tracked in AGENTS.md § 9 launch checklist.
+
+AGENTS.md updated: § 4 repo tree replaces `<future second brand>/` with `northgate-heritage/`; § 4 placement note refreshed for Heritage live (no more "Heritage will have its own copies in Plan 2b"); § 6 Operational discipline drops the "post-Plan-2b" qualifier from the 5-place env-var rule; § 9 next-task slot moves to "Meta Pixel client-side install"; § 9 launch checklist updates Heritage hero photography from "firm SAC blocker" gate to active blocker, adds Heritage A2P 10DLC second number deferred line, adds Heritage `AGENT_PHONE_NUMBER` Phase 1 commitment context.
+
 ## 2026-05-03 — Per-product template + per-app library refactors (Plan 2a)
 
 Plan 2a of the second-brand sequence per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. **Pure refactors — no Heritage app, no second brand populated in DB, no schema changes.** Closes the two CHANGELOG follow-ups Plan 1 flagged (`formatAgentSMS` runtime guard → per-product Zod parsing; `consent.ts`/`intent.ts` per-app extraction) plus a third refactor that surfaced during design (common validation primitives extraction). Plan 2b (apps/northgate-heritage scaffold) was split out for blast-radius isolation per architect override of the original Plan 2 scope.

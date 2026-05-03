@@ -1,0 +1,8 @@
+<!-- PLACEHOLDER — replace with real Hearth-direction logo per AGENTS.md § 9 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 170" width="320" height="170">
+  <g transform="translate(140, 14)">
+    <path d="M 20,0 L 40,40 L 0,40 Z M 20,12 L 32,36 L 8,36 Z" fill="#7A3E36" fill-rule="evenodd"/>
+  </g>
+  <text x="160" y="115" text-anchor="middle" style="font-family: Georgia, 'Times New Roman', serif; font-size: 30px; font-weight: 500; fill: #7A3E36; letter-spacing: 0.18em;">NORTHGATE</text>
+  <text x="160" y="140" text-anchor="middle" style="font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11px; fill: #B8845F; letter-spacing: 0.42em; font-weight: 500;">HERITAGE</text>
+</svg>
