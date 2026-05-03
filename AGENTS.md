@@ -151,6 +151,8 @@ After build: update § 9 here (next task), append an entry to `docs/CHANGELOG.md
 
 **One reviewer.** The developer presents plans to Claude.ai (the project chat) for review. No second AI reviewer in Phase 1; that comes when Phase 2 (the platform app) starts.
 
+**Tests.** Pure-function business logic (intent scoring, validation, template byte-identity, phone normalization, STOP keyword detection, SMS dispatcher routing) is covered by vitest. Run `pnpm test` for the unit suite (~7 files / 100+ assertions / <2s); `pnpm test:watch` for the dev loop. Test files are co-located with sources (`<source>.test.ts`). Integration tests (DB writes, dispatch side effects, Twilio webhook) stay as bespoke `tsx` scripts in `scripts/` — see `test-dispatch-suppression.ts` for the pattern. No CI / no coverage gates / no UI snapshots in Phase 1.
+
 ---
 
 ## 6. Non-Negotiables
