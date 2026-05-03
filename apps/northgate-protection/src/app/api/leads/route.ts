@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
-import { LeadFormSchema, type LeadFormInput } from "@platform/shared/validation/lead-schema";
-import { CONSENT_TEXT, FORM_VERSION } from "@platform/shared/utils/consent";
-import { computeIntentScore, computeTemperature } from "@platform/shared/utils/intent";
+import { LeadFormSchema, type LeadFormInput } from "@/lib/validation/lead-schema";
+import { CONSENT_TEXT, FORM_VERSION } from "@/lib/consent";
+import { computeIntentScore, computeTemperature } from "@/lib/intent";
 import { normalizePhone } from "@platform/shared/utils/phone";
 import { checkRateLimit } from "@platform/shared/utils/rate-limit";
 import {

@@ -6,10 +6,12 @@
     "dev": "pnpm --filter northgate-protection dev",
     "build": "pnpm --filter northgate-protection build",
     "lint": "pnpm --filter northgate-protection lint",
-    "gen:types": "supabase gen types --lang=typescript --linked --schema public > packages/shared/types/database.ts"
+    "gen:types": "supabase gen types --lang=typescript --linked --schema public > packages/shared/types/database.ts",
+    "verify-envs": "tsx scripts/verify-envs.ts"
   },
   "devDependencies": {
     "supabase": "^2.95.3",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   },
   "pnpm": {

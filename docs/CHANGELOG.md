@@ -4,6 +4,67 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-05-03 — Per-product template + per-app library refactors (Plan 2a)
+
+Plan 2a of the second-brand sequence per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. **Pure refactors — no Heritage app, no second brand populated in DB, no schema changes.** Closes the two CHANGELOG follow-ups Plan 1 flagged (`formatAgentSMS` runtime guard → per-product Zod parsing; `consent.ts`/`intent.ts` per-app extraction) plus a third refactor that surfaced during design (common validation primitives extraction). Plan 2b (apps/northgate-heritage scaffold) was split out for blast-radius isolation per architect override of the original Plan 2 scope.
+
+**Per-product template + email split** (architect's first ask):
+- `packages/shared/validation/details/{mortgage_protection,final_expense}.ts` (NEW): per-product Zod schemas as the single canonical source of truth for `details` JSONB shape — used by both form-side validation (per-app, eventually) AND template-side parsers (shared dispatchers). FE schema is a `z.object({}).passthrough()` placeholder; Plan 2b populates it.
+- `packages/shared/twilio/templates/{mortgage_protection,final_expense}.ts` (NEW): MP template extracted from the old `formatAgentSMS` body; replaces Plan 1's hand-rolled `isMortgageProtectionDetails` type guard with `MortgageProtectionDetailsSchema.safeParse()`. FE template throws `Plan 2b will populate this template` placeholder.
+- `packages/shared/email/templates/{mortgage_protection,final_expense}.ts` (NEW): same pattern. MP welcome-email body extracted verbatim; FE placeholder.
+- `packages/shared/twilio/messages.ts` + `packages/shared/email/welcome.ts` (REFACTORED): both files become dispatchers — switch on `lead.product`, route to per-product template, throw with descriptive error on unknown product. The `STOP_KEYWORDS` set + `isStopKeyword` helper stay in `messages.ts` as brand-agnostic Twilio webhook utilities. `sendWelcomeEmail()` orchestration (suppressions check, Resend call, `recordEmailSent`, error handling) unchanged.
+- `packages/shared/types/products.ts` (REFACTORED): `MortgageProtectionDetails` interface is now `z.infer<typeof MortgageProtectionDetailsSchema>` re-export. Single source of truth — no hand-maintained drift between interface and Zod schema.
+
+**Per-app `consent.ts` + `intent.ts` extraction** (architect's second ask):
+- `apps/northgate-protection/src/lib/consent.ts` (MOVED from `packages/shared/utils/consent.ts`). `CONSENT_TEXT` references "mortgage protection insurance" — brand-specific, doesn't belong in shared. Module-load assertion (`endsWith(LINKED_CONSENT_SUFFIX)`) re-runs from new file location.
+- `apps/northgate-protection/src/lib/intent.ts` (MOVED from `packages/shared/utils/intent.ts`). `computeIntentScore` weights `mortgage_balance` + `is_smoker` + form-shaped flat input — no abstraction to share with Heritage's eventual FE-shaped score. Per-app placement was the architect-flagged option from Plan 1.
+- `packages/shared/utils/` keeps only brand-agnostic helpers: `phone.ts`, `rate-limit.ts`.
+
+**Common validation extraction** (third refactor, surfaced during Plan 2 design):
+- `packages/shared/validation/common.ts` (NEW): `US_STATES`, `US_STATE_NAMES`, `TIME_OF_DAY`, `phoneSchema`, `emailSchema`, `firstNameSchema`, `lastNameSchema` — brand-agnostic Zod primitives both apps will reuse.
+- `apps/northgate-protection/src/lib/validation/lead-schema.ts` (MOVED from `packages/shared/validation/lead-schema.ts`). The form-shaped MP schema is brand-specific. Refactored to import primitives from `@platform/shared/validation/common`. Re-exports `US_STATES` + `US_STATE_NAMES` for the form component.
+- `apps/northgate-protection/package.json` gains `zod` as a direct dep (the moved schema needs it; previously transitive via `@platform/shared`).
+
+**`pnpm verify-envs` script + 5-place env-var rule** (architect's operational additions):
+- `scripts/verify-envs.ts` (NEW): reads root `.env.local` + each `apps/<app>/.env.local`, parses keys (ignores values — those legitimately differ per environment), reports drift if any location is missing keys present elsewhere. Read-only, exits 0 on match, non-zero with diff on drift. Wired into root `package.json` as `pnpm verify-envs` (added `tsx` as root devDep).
+- AGENTS.md § 6 gains an "Operational discipline" section with the **5-place env-var update rule** (root + each app's `.env.local` + each Vercel project's dashboard). Pre-Plan-2b this is effectively 3-place (root + NP + NP-Vercel); rule grows when Heritage's `.env.local` and Vercel project land.
+- AGENTS.md § 4 + § 6 updated to reflect post-Plan-2a reality (per-app vs per-product vs shared placement, Zod-as-single-source-of-truth pattern).
+
+**`packages/shared/package.json` `exports` field** (REFACTORED): removed orphaned (`./validation/lead-schema`, `./utils/consent`, `./utils/intent`); added new (`./validation/common`, `./validation/details/{mortgage_protection,final_expense}`, `./twilio/templates/{mortgage_protection,final_expense}`, `./email/templates/{mortgage_protection,final_expense}`, `./types/products`).
+
+**Decisions locked** (from the plan):
+- Plan 2a + 2b split (architect-required) — refactors land first under independent verification, Heritage app scaffold is a separate plan.
+- Per-product Zod schemas in `packages/shared/validation/details/` (not per-app) — single canonical source for `details` JSONB shape, used by form-side AND template-side.
+- `MortgageProtectionDetails` interface derived via `z.infer<>`, not hand-maintained.
+- `consent.ts` + `intent.ts` placement per-app, not parameterized in shared.
+- `lead-schema.ts` placement per-app, with shared primitives in `validation/common.ts`.
+- **NP SMS template line-1 changed: `🔥 NEW HOT LEAD` → `🔥 NEW HOT MP LEAD`.** Intentional one-line content change for symmetry with Heritage's eventual `FE LEAD` prefix. Tells the agent which product the lead is for at a glance. Parity check #1 explicitly accepted this single-line diff.
+- Email template content for NP unchanged (byte-identical).
+
+**Architect-required parity verification — all PASS:**
+- **Parity check #1 (Step 1, post-template-split):** Submitted lead `92cb2eb1` via local dev with deterministic input set matching Plan 1's baseline. SMS body byte-comparison: line 1 reads `🔥 NEW HOT MP LEAD` (was `🔥 NEW HOT LEAD` — intentional +3 bytes); every other line byte-identical. Verified via Twilio API by SID. Email body: byte-identical (no email change for NP).
+- **Parity check #2 (Step 2, post-consent.ts move):** Submitted lead `2a8b66b9`. `consent_text` byte-identical to baseline (file move only, content unchanged). Module-load assertion `endsWith(LINKED_CONSENT_SUFFIX)` still fires from new location. Form still renders the linked consent paragraph correctly.
+- **Parity check #3 (Step 3, post-lead-schema move):** Submitted lead `f3a7e5cd`. Form validation accepts the same input set the same way. `intent_score=80`, `temperature=hot`, `consent_text` byte-identical. Zod refinements (phone E.164, US state, etc.) imported from `validation/common.ts` produce identical validation behavior.
+
+**Negative-path verification (Step 6):** rewrote `scripts/test-format-agent-sms-assertion.ts` as the dispatcher-aware replacement. Exercises 4 cases: (1) valid MP lead → produces SMS with `MP LEAD` prefix + correct balance formatting; (2) MP lead with bad-shape details (missing `mortgage_balance`) → throws via Zod parse inside MP template, error names lead id + product; (3) FE lead → throws Plan-2b placeholder error from `formatFinalExpenseSMS`; (4) unknown product (`'auto_insurance'`) → dispatcher throws with descriptive "add a template at packages/shared/twilio/templates/<product>.ts" error. All 6 assertions PASS.
+
+**Build + lint:** clean. 1 pre-existing RHF warning, 0 errors. Route table identical to Plan 1's post-state (4 static + 3 dynamic — `/`, `/_not-found`, `/privacy`, `/terms` static; `/api/health`, `/api/leads`, `/api/twilio/incoming` dynamic). `pnpm verify-envs` clean (17 keys both locations match).
+
+**Bundle parity:** consent text content unchanged (CONSENT_TEXT constant moved files but stayed byte-identical), so chunk content for the form is functionally identical — verified via parity check #2 (live-form `consent_text` byte-identical at the DB write). Exact chunk byte-length not captured cleanly because an IDE/extension process kept spawning parallel `next build` invocations during inspection; the load-bearing parity proof is the runtime check, not the static chunk.
+
+**Cleanup:** Deleted `scratch/pre-migration-backup.sql` + `scratch/pre-migration-data.sql` (Plan 1 backups, ≥24h post-merge soak elapsed; rollback procedure remains in the migration file's header comment).
+
+**Twilio attribution gap (carryover note for Plan 2b — set the framing now):** Plan 2b will introduce Heritage as a sibling brand sharing NP's Twilio number. All STOPs from any brand land on NP's `/api/twilio/incoming` and get `source_brand='northgate-protection'`. **This is a known compliance imprecision, not a bug.** Suppression *enforcement* stays cross-brand (correct — `isSuppressed(phone)` queries by phone alone, ignores brand); but the *attribution* on the suppression row is unreliable for "which brand's SMS triggered this user's STOP." If a TCPA dispute ever asks that question, the answer comes from Twilio's API message log (which records the from-number + timestamp authoritatively), NOT from `suppressions.source_brand`. Resolves only when a separate Twilio number is provisioned for Heritage (gates on a separate A2P 10DLC application for the second number).
+
+**Flag for Plan 2b (Heritage app scaffold):**
+- Scaffold `apps/northgate-heritage/` mirroring `apps/northgate-protection/` structure (sibling brand, sharing `@platform/shared`).
+- Hearth visual direction (design templates from prior Northgate brand pass, repurposed for sibling brand).
+- Populate FE-specific files: `apps/northgate-heritage/src/lib/{consent.ts, intent.ts, validation/lead-schema.ts}` plus the 4 placeholder shared files Plan 2a left at `packages/shared/{validation/details, twilio/templates, email/templates}/final_expense.ts`.
+- New Vercel project for Heritage. Activates the 5-place env-var rule (root + NP + Heritage `.env.local`s + 2 Vercel project dashboards).
+- Heritage launch checklist: real hero photography is a **firm blocker** for SAC submission (not a watch-item like NP's brand-mark fallback) — Hearth direction reads as "design unfinished" without photos.
+
+AGENTS.md updated: § 4 (per-app vs per-product vs shared placement note replaces the old "consent.ts/intent.ts are mortgage-specific" caveat); § 6 Schema discipline gains a per-product Zod schemas bullet + new "Operational discipline" section with the 5-place env-var rule + `pnpm verify-envs` guidance; § 9 next-task slot moves to "Plan 2b: scaffold apps/northgate-heritage/"; § 9 hero-imagery launch-checklist item gains the firm-blocker-for-Heritage carryover note.
+
 ## 2026-05-03 — Multi-brand schema migration (brand + product + details JSONB)
 
 Plan 1 of the second-brand sequence per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. **Pure schema infrastructure** — no FE app, no second brand populated in DB. The `apps/final-expense/` scaffold is Plan 2.

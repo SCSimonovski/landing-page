@@ -6,44 +6,28 @@ import {
   recordEmailSent,
   recordEmailSkipped,
 } from "../db/leads";
+import type { Database } from "../types/database";
+import { renderMortgageProtectionWelcomeEmail } from "./templates/mortgage_protection";
+import { renderFinalExpenseWelcomeEmail } from "./templates/final_expense";
 
-// Welcome email per docs/playbook/02_Technical_Reference.md Part 4.3.
-// Plain text only — higher inbox placement, no rendering surprises.
-//
-// {firstName} is the only dynamic insertion. [BRAND NAME PLACEHOLDER] and
-// [AGENT NAME PLACEHOLDER] follow the same convention as the H1 marker
-// and consent text — visible in dev, replaced when the brand and team
-// names exist.
-//
-// "Reply STOP to any text" is wired (Twilio STOP webhook). The
-// "or 'unsubscribe' here to opt out" instruction is NOT wired in Phase 1
-// — we don't process inbound email replies. Asymmetry documented in the
-// task CHANGELOG.
-function renderWelcomeEmail(firstName: string, siteUrl: string): {
-  subject: string;
-  text: string;
-} {
-  const subject = `Your mortgage protection quote is on its way, ${firstName}`;
-  const text = [
-    `Hi ${firstName},`,
-    "",
-    "Thanks for requesting a mortgage protection quote.",
-    "",
-    "One of our licensed agents will call you shortly from a US number to talk through options",
-    "tailored to your mortgage. The call takes 10-15 minutes. There's no obligation, no pressure,",
-    "and no medical exam required for an initial quote.",
-    "",
-    "If you'd prefer a different time, just reply to this email.",
-    "",
-    "Talk soon,",
-    "[AGENT NAME PLACEHOLDER]",
-    "[BRAND NAME PLACEHOLDER]",
-    "",
-    "---",
-    `Privacy policy: ${siteUrl}/privacy`,
-    "Reply STOP to any text or 'unsubscribe' here to opt out.",
-  ].join("\n");
-  return { subject, text };
+type LeadRow = Database["public"]["Tables"]["leads"]["Row"];
+
+// Body-rendering dispatcher — routes to per-product templates by lead.product.
+// Same pattern as the SMS dispatcher in twilio/messages.ts.
+function renderWelcomeEmail(
+  lead: LeadRow,
+  siteUrl: string,
+): { subject: string; text: string } {
+  switch (lead.product) {
+    case "mortgage_protection":
+      return renderMortgageProtectionWelcomeEmail(lead.first_name, siteUrl);
+    case "final_expense":
+      return renderFinalExpenseWelcomeEmail(lead.first_name, siteUrl);
+    default:
+      throw new Error(
+        `renderWelcomeEmail: lead ${lead.id} has unknown product='${lead.product}'.`,
+      );
+  }
 }
 
 // Send the welcome email to a lead. Called in parallel with sendAgentSMS
@@ -76,7 +60,7 @@ export async function sendWelcomeEmail(leadId: string): Promise<void> {
       return;
     }
 
-    const { subject, text } = renderWelcomeEmail(lead.first_name, siteUrl);
+    const { subject, text } = renderWelcomeEmail(lead, siteUrl);
     const resend = getResendClient();
     const { data, error } = await resend.emails.send({
       from: process.env.FROM_EMAIL!,
