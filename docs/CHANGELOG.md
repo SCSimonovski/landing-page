@@ -4,6 +4,66 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-05-03 — Plan 2c: Vitest test suite + high-ROI pure-function coverage
+
+Plan 2c per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. **Pure local-dev tooling — no production code paths added, no API contracts changed, no schema/migrations.** Adds vitest at the workspace root + 7 test files covering the highest-ROI pure functions across the codebase, ports the existing bespoke dispatcher script to vitest format, and deletes the original. NP runtime unchanged. Heritage runtime unchanged.
+
+**Vitest setup:**
+- `vitest@^2.1.9` added as a single root devDep. No new runtime deps. No new app deps.
+- `vitest.config.ts` at repo root — auto-discovers `**/*.test.ts` workspace-wide, excludes `node_modules` / `.next` / `dist`. Default `node` environment. `@platform/shared` resolved via alias to `packages/shared/` (mirrors how each app's `next.config.ts` uses `transpilePackages: ["@platform/shared"]` — without the alias vitest would try Node package-export resolution against the raw-`.ts` shipping pattern and fail).
+- Root `package.json` gains `"test": "vitest run"` and `"test:watch": "vitest"` scripts.
+
+**7 test files, 114 assertions, ~700ms full-suite runtime:**
+
+| File | Coverage |
+|---|---|
+| `apps/northgate-protection/src/lib/intent.test.ts` | NP `computeIntentScore` per tier (mortgage_balance × age × smoker × time × engagement) + max-score 90 + `computeTemperature` boundaries (0/49/50/69/70/90). 26 assertions. |
+| `apps/northgate-heritage/src/lib/intent.test.ts` | Heritage `computeIntentScore` per FE tier (age 60-75=35, 50-59=25, 76-85=20, else=5; coverage tiers; health flags; engagement) + max-score 90 + `computeTemperature` (intentionally identical thresholds to NP — confirms cross-brand parity). 28 assertions. |
+| `packages/shared/utils/phone.test.ts` | `normalizePhone`: 8 valid US variants (E.164 in/out, raw 10/11, parens, dashes, dots, spaces, mixed) + 7 invalid (empty, garbage, too short, non-US UK/FR, missing area code). 15 assertions. |
+| `packages/shared/twilio/messages.test.ts` | **Ported** `scripts/test-format-agent-sms-assertion.ts` — 5 dispatcher cases (valid MP, bad-shape MP, valid FE, bad-shape FE, unknown product) → 8 vitest assertions. PLUS `isStopKeyword`: canonical keywords (8) + case-insensitivity (4) + whitespace (2) + non-matches (4). 25 assertions. |
+| `packages/shared/validation/details/mortgage_protection.test.ts` | `MortgageProtectionDetailsSchema.safeParse`: valid + 5 rejection cases (missing balance, balance < 50k, balance > 2M, wrong-typed smoker, non-integer balance). 6 assertions. |
+| `packages/shared/validation/details/final_expense.test.ts` | `FinalExpenseDetailsSchema.safeParse`: valid + 4 rejection cases + 4 valid beneficiary enum values + invalid enum + wrong-typed health. 10 assertions. |
+| `packages/shared/email/templates/__byte_identity.test.ts` | `renderMortgageProtectionWelcomeEmail` + `renderFinalExpenseWelcomeEmail` byte-identity for both subject + body. Mirrors the SMS dispatcher test's protection — catches accidental copy edits to user-facing TCPA-relevant text at test time. 4 assertions. |
+
+**Script migration:**
+- `scripts/test-format-agent-sms-assertion.ts` PORTED to `packages/shared/twilio/messages.test.ts` and DELETED. Single source of truth — keeping both would drift.
+- `scripts/test-dispatch-suppression.ts` STAYS as a bespoke `tsx` script. It's an integration test (hits Supabase + Twilio APIs, requires `.env.local` loaded, exercises real side effects, slow). Belongs in the "live verification" register, not the "fast unit" register.
+- `scripts/verify-envs.ts` STAYS — utility, not a test.
+
+**Decisions locked** (from the plan):
+- Vitest as the test runner (vs Jest or `node --test`) — modern default for Next.js/TS workspaces, fast watch, nice assertion API.
+- Co-located test files (`<source>.test.ts` next to source) — vs centralized `tests/` dir or `__tests__/` directories.
+- Single root `vitest.config.ts` with `@platform/shared` alias — vs per-package configs.
+- Pure-function tests only — DB / dispatch / Twilio webhook / `/api/leads` E2E explicitly out of scope.
+- No coverage reporting (`@vitest/coverage-v8`), no CI integration (no GitHub Actions), no UI snapshot tests, no mocking infrastructure (`vi.mock`) — all Phase 2 territory.
+- No setup needed for `server-only` modules — initial tests don't import any. Punt the `vi.mock("server-only", () => ({}))` pattern until first need.
+
+**Verification — all PASS:**
+- `pnpm install` clean (one new devDep).
+- `pnpm test` runs the full suite: **7 files / 114 tests / 81ms test-runtime / ~700ms wall-clock**, all PASS.
+- `pnpm test:watch` watches and re-runs on file changes.
+- `pnpm --filter northgate-protection lint && build` clean — vitest is a devDep, doesn't affect production.
+- `pnpm --filter northgate-heritage lint && build` clean.
+- `pnpm verify-envs` clean (no env changes).
+
+**Intentional-regression verification (Approach G):**
+- Temporarily flipped Heritage's `if (lead.age >= 60 && lead.age <= 75) score += 35;` → `score += 30;`.
+- Ran `pnpm test`. Caught by **3 failing tests** with clear locators:
+  - `computeIntentScore (Heritage / final_expense) > age tiers > age 60 → 35 pts` — `expected 40 to be 45`.
+  - `computeIntentScore (Heritage / final_expense) > age tiers > age 75 → 35 pts` — `expected 40 to be 45`.
+  - `computeIntentScore (Heritage / final_expense) > max-score lead hits 90` — `expected 85 to be 90`.
+- Reverted the flip. All 114 PASS again. Tests are wired to source, not vacuously passing.
+
+**AGENTS.md updates:**
+- § 5 Development Workflow gains a "Tests" paragraph: `pnpm test` for the unit suite, `pnpm test:watch` for the dev loop, what's covered, where test files live, what's NOT covered (integration / CI / coverage / snapshots — Phase 2).
+- § 9 next-task slot stays at "Meta Pixel client-side install" (Plan 2c is supporting infra; doesn't shift the next-task slot).
+
+**Out-of-band notes (Plan 2c carryovers):**
+- **Phase 2 follow-ups:** GitHub Actions CI to run `pnpm test` on every PR; coverage reporting if it ever feels valuable (probably still skip); UI snapshot tests for the platform's React components if they justify it.
+- **Integration test gap (intentional):** `/api/leads`, the dispatch path, the Twilio webhook, and the Supabase RPC are not unit-tested. Live-submission parity protocol covers them. Revisit if Phase 2 introduces more code paths through these.
+- **`server-only` mocking pattern (deferred):** when first needed, the standard pattern is `vi.mock("server-only", () => ({}))` in the test file.
+- **Test file naming convention:** `<source>.test.ts` co-located. Do NOT use `__tests__/` directories or `tests/` parallel trees — co-location is the established pattern from this plan.
+
 ## 2026-05-03 — Heritage UI: apply user-supplied Hearth direction (cream + navy + terracotta)
 
 Follow-up to the Plan 2b commit on the same `scaffold-northgate-heritage` branch. The first Plan 2b commit shipped Heritage with an invented warm-cream + burgundy/gold palette that the user had not approved. User supplied two design screenshots (mobile + desktop) showing the actual Hearth direction — pivots Heritage to:
