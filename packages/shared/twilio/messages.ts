@@ -1,6 +1,23 @@
 import type { Database } from "../types/database";
+import type { MortgageProtectionDetails } from "../types/products";
 
 type LeadRow = Database["public"]["Tables"]["leads"]["Row"];
+
+// Runtime type guard for the details JSONB shape. Defends against the cast
+// silently producing $NaN / $undefined in an SMS to the agent if the JSONB
+// is malformed (backfill bug, Plan 2 routing FE leads through this template
+// before the per-product split lands, etc.). Architect-required per Plan 1.
+function isMortgageProtectionDetails(
+  d: unknown,
+): d is MortgageProtectionDetails {
+  if (typeof d !== "object" || d === null) return false;
+  const obj = d as Record<string, unknown>;
+  return (
+    typeof obj.mortgage_balance === "number" &&
+    typeof obj.is_smoker === "boolean" &&
+    typeof obj.is_homeowner === "boolean"
+  );
+}
 
 // Format the agent SMS per docs/playbook/02_Technical_Reference.md Part 5.3.
 // Uses .toLocaleString("en-US") for the mortgage balance — same pattern as
@@ -11,12 +28,26 @@ type LeadRow = Database["public"]["Tables"]["leads"]["Row"];
 // mode (with the "Sent from your Twilio trial account" prefix) and 2
 // segments in production. Cost analysis in the plan; keeping the emoji
 // for the lock-screen UX win.
+//
+// Plan 2 will split this into per-product templates
+// (packages/shared/twilio/templates/{northgate-protection,final-expense}.ts)
+// and a dispatcher that routes by `lead.product`. Until then, this function
+// is mortgage-protection-only and the runtime assertion below guards the
+// JSONB shape.
 export function formatAgentSMS(lead: LeadRow): string {
+  if (!isMortgageProtectionDetails(lead.details)) {
+    throw new Error(
+      `formatAgentSMS: lead ${lead.id} (product=${lead.product}) has invalid ` +
+        `details shape; expected MortgageProtectionDetails. Plan 2 should ` +
+        `split this into per-product templates.`,
+    );
+  }
+  const details = lead.details;
   const emoji = lead.temperature === "hot" ? "🔥" : "⚡";
   return [
     `${emoji} NEW ${lead.temperature.toUpperCase()} LEAD`,
     `${lead.first_name} ${lead.last_name}, age ${lead.age}`,
-    `${lead.state} — mortgage $${lead.mortgage_balance.toLocaleString("en-US")}`,
+    `${lead.state} — mortgage $${details.mortgage_balance.toLocaleString("en-US")}`,
     `Call: ${lead.phone_e164}`,
     `Score: ${lead.intent_score}/90`,
     "",

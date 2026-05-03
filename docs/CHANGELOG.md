@@ -4,6 +4,62 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-05-03 — Multi-brand schema migration (brand + product + details JSONB)
+
+Plan 1 of the second-brand sequence per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. **Pure schema infrastructure** — no FE app, no second brand populated in DB. The `apps/final-expense/` scaffold is Plan 2.
+
+**Schema changes** (one atomic migration `20260503120000_multi_brand_schema.sql`):
+- `leads`: added `brand text NOT NULL`, `product text NOT NULL`, `details jsonb NOT NULL`. Backfilled all existing rows with `brand='northgate-protection'`, `product='mortgage_protection'`, `details=jsonb_build_object('mortgage_balance',...,'is_smoker',...,'is_homeowner',...)`. **Dropped** `mortgage_balance`, `is_smoker`, `is_homeowner` top-level columns. Added `leads_brand_product_idx` composite index for cross-brand queries.
+- `consent_log`: added `brand text NOT NULL`, backfilled to `'northgate-protection'`.
+- `suppressions`: added `source_brand text` (nullable, informational only — enforcement stays cross-brand via existing `isSuppressed(phone)` query).
+- `insert_lead_with_consent(jsonb)` RPC: dropped + recreated with new payload shape (top-level brand/product, details as jsonb, dropped 3 column references). New `created` event_data also includes brand + product for downstream debugging.
+
+**Backfill outcome:** 18/18 existing `leads` rows backfilled cleanly (null_brand=0, null_details=0). 18/18 `consent_log` rows backfilled. Zero NULL values, zero data loss.
+
+**App code changes** (workspace + app):
+- `packages/shared/types/products.ts` (NEW): `MortgageProtectionDetails` interface; comments scaffolding `FinalExpenseDetails` for Plan 2.
+- `packages/shared/db/leads.ts`: `LeadInsertInput` reshaped (drop 3 flat fields, add `brand`/`product`/`details`).
+- `packages/shared/twilio/messages.ts`: `formatAgentSMS` reads `lead.details.mortgage_balance` via cast + **runtime type guard** that throws with descriptive error if details shape is malformed (defense-in-depth against backfill bugs or Plan 2 mis-routing). Plan 2 will replace this with per-product templates routed by `lead.product`.
+- `packages/shared/db/suppressions.ts`: `addSuppression()` accepts optional `source_brand` parameter.
+- `packages/shared/utils/intent.ts`: comment update only — function signature unchanged because `/api/leads` computes intent score from form input (not from a DB row), so it doesn't need to read from JSONB.
+- `apps/northgate-protection/src/app/api/leads/route.ts`: payload assembly now puts `mortgage_balance`/`is_smoker`/`is_homeowner` inside `details: { ... }`, plus hardcoded `brand: 'northgate-protection'`, `product: 'mortgage_protection'`.
+- `apps/northgate-protection/src/app/api/twilio/incoming/route.ts`: STOP webhook passes `source_brand: 'northgate-protection'`.
+
+**Decisions locked** (from the plan):
+- Brand/product as `text` columns (not enum) — flexibility to add brands without DDL.
+- `is_smoker` stays in `details` per-product (not promoted to top-level even though FE will also use it) — cleaner per-product contract.
+- No DB-level CHECK constraints on JSONB-derived fields — Zod at the form layer is the source of truth.
+- Single atomic migration (not multi-step) — all-or-nothing transactional.
+- Cross-brand suppression enforcement preserved — `source_brand` is informational only.
+- Cross-brand DNC scrubbing + 30-day phone dedup unchanged.
+- `lead_events` does NOT carry `brand` directly — joinable via `lead_id`; the new composite index on `leads(brand, product)` makes cross-brand event queries efficient.
+
+**Architect-required parity verification — all PASS:**
+- Pre-migration baseline (lead `4688211f`): intent_score=80, temperature=hot, SMS body 152 chars from Twilio API by SID, Resend `validation_error` on example.com.
+- Post-migration baseline (lead `77cc5884`, same deterministic input set except phone): intent_score=80 ✓, temperature=hot ✓, SMS body 152 chars ✓ (only phone differs by 1 char — intentional input change), Resend `validation_error` ✓.
+- **SMS body byte-identity verified** via Twilio API fetch. The `formatAgentSMS` cast + runtime assertion produces the same string the pre-migration code did. `DC — mortgage $250,000` rendered identically from `lead.details.mortgage_balance` as it did from `lead.mortgage_balance`.
+- All `consent_log` columns byte-identical (consent_text, form_version, ip_address, user_agent, page_url) plus the new `brand` field populated correctly.
+- All `lead_events` types in order: `created` → `sms_sent`. `created` event_data adds `brand`+`product` (architect's "modulo new fields" additive part).
+
+**Negative-path verification (Plan 1 Step 7.5, architect-recommended):** ran `scripts/test-format-agent-sms-assertion.ts` which calls `formatAgentSMS` with three malformed details shapes (null details, `{foo: "bar"}`, FE-shaped `{desired_coverage, is_smoker}`). All 3 assertions fired with the expected error message naming the lead id and product. Confirms the runtime guard catches Plan 2 routing mistakes when they happen.
+
+**Bundle parity:** 3 consent-text fragments (`"By checking this box and clicking"`, `"revoke consent at any"`, `"STOP to any text"`) present exactly once in the form chunk. Chunk filename + byte length identical to pre-migration (form code didn't change in this migration).
+
+**Build + lint:** clean. 1 pre-existing RHF warning, 0 errors. Route table identical (4 static + 3 dynamic). `pnpm gen:types` regenerated `packages/shared/types/database.ts` correctly.
+
+**Backups + rollback:**
+- `scratch/pre-migration-backup.sql` (schema, 14.5KB) + `scratch/pre-migration-data.sql` (data, 32.5KB, all current rows) preserved before applying migration.
+- Inline rollback procedure documented in the migration file's header comment block (re-create columns, back-extract from details JSONB, drop new columns, restore RPC).
+- **DO NOT delete `scratch/` until Plan 1 is merged + verified clean for ≥24h on live Vercel.**
+
+**Production-window note:** The migration applied to `mpl-dev` before the merge to `main` lands. Per AGENTS.md § 9, the live Vercel deploy at `northgateprotection.vercel.app` shares `mpl-dev` with the dev environment (no `mpl-prod` yet), so production was in a broken state between "Step 3: migration applied" and "Step 11: PR merged". Window kept short (~2-3h). When `mpl-prod` lands as a separate task, this kind of migration can apply to dev independently of production.
+
+**Flag for Plan 2 (FE app scaffold):**
+- `packages/shared/utils/consent.ts` and `packages/shared/utils/intent.ts` are mortgage-protection-specific (CONSENT_TEXT references "mortgage protection insurance", computeIntentScore weights mortgage_balance + smoker). Plan 2 needs to either parameterize these by product or move them to per-app. Already noted in the workspace-lift CHANGELOG; this migration didn't change them.
+- `formatAgentSMS` is mortgage-only with a runtime guard. Plan 2 splits this into `packages/shared/twilio/templates/{northgate-protection,final-expense}.ts` and adds a dispatcher routing by `lead.product`.
+
+AGENTS.md updated: § 6 Schema discipline gains a bullet about the multi-brand discriminator pattern + per-product `details` JSONB. § 9 next-task slot moves to "Plan 2: scaffold apps/final-expense/".
+
 ## 2026-05-02 — Workspace lift to pnpm workspace (apps/ + packages/shared/)
 
 Pure mechanical refactor per AGENTS.md § 4 + the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. Repo lifted to a pnpm workspace: current Next.js app moved to `apps/northgate-protection/`, shared infrastructure (db helpers, validation schemas, dispatchers, utilities) extracted to `@platform/shared` at `packages/shared/`. **Zero functional changes, zero schema changes, zero new brand introduced.** Why now: the codebase is small enough that the lift is mechanically simple, and it unblocks both the agent platform (Phase 2) and any second-brand scaffold without coupling those decisions to structural refactor risk.

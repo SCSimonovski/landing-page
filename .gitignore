@@ -44,6 +44,9 @@ yarn-error.log*
 # Claude Code session-local config
 .claude/
 
+# Scratch directory for one-off files (DB backups, test data, throwaway scripts)
+scratch/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

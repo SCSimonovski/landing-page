@@ -36,7 +36,11 @@ export async function POST(req: Request) {
 
   if (from && isStopKeyword(body)) {
     try {
-      await addSuppression({ phone_e164: from, reason: "SMS_STOP" });
+      await addSuppression({
+        phone_e164: from,
+        reason: "SMS_STOP",
+        source_brand: "northgate-protection",
+      });
       // Log last-4 of phone for forensics; full PII stays out of logs.
       const last4 = from.slice(-4);
       console.log(`[twilio/incoming] suppressed ...${last4}`);
