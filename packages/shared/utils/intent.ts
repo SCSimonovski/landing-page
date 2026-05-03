@@ -1,6 +1,12 @@
 // Lead intent score + temperature.
 // Spec: docs/playbook/02_Technical_Reference.md Part 3.7.
 // Pure functions; no DB, no PII handling. Called by /api/leads.
+//
+// Mortgage-protection-specific (post-multi-brand-migration 2026-05-03 still
+// reads flat IntentInput because /api/leads computes the score BEFORE shaping
+// details JSONB — see route handler). Plan 2 will introduce per-product
+// intent scoring for Final Expense; this function may move to an
+// app-specific location or get parameterized by product at that point.
 
 export type Temperature = "hot" | "warm" | "cold";
 

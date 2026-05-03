@@ -43,6 +43,7 @@ export type Database = {
       }
       consent_log: {
         Row: {
+          brand: string
           consent_text: string
           created_at: string
           form_version: string
@@ -53,6 +54,7 @@ export type Database = {
           user_agent: string
         }
         Insert: {
+          brand: string
           consent_text: string
           created_at?: string
           form_version: string
@@ -63,6 +65,7 @@ export type Database = {
           user_agent: string
         }
         Update: {
+          brand?: string
           consent_text?: string
           created_at?: string
           form_version?: string
@@ -134,7 +137,9 @@ export type Database = {
           age: number
           agent_id: string | null
           best_time_to_call: Database["public"]["Enums"]["time_of_day"]
+          brand: string
           created_at: string
+          details: Json
           email: string
           fbc: string | null
           fbclid: string | null
@@ -143,16 +148,14 @@ export type Database = {
           first_name: string
           id: string
           intent_score: number
-          is_homeowner: boolean
-          is_smoker: boolean
           landing_page_variant: string | null
           last_name: string
-          mortgage_balance: number
           notes: string | null
           on_dnc: boolean
           outcome: string | null
           phone_e164: string
           policy_value: number | null
+          product: string
           state: string
           status: Database["public"]["Enums"]["lead_status"]
           temperature: Database["public"]["Enums"]["lead_temperature"]
@@ -165,7 +168,9 @@ export type Database = {
           age: number
           agent_id?: string | null
           best_time_to_call: Database["public"]["Enums"]["time_of_day"]
+          brand: string
           created_at?: string
+          details: Json
           email: string
           fbc?: string | null
           fbclid?: string | null
@@ -174,16 +179,14 @@ export type Database = {
           first_name: string
           id?: string
           intent_score: number
-          is_homeowner: boolean
-          is_smoker: boolean
           landing_page_variant?: string | null
           last_name: string
-          mortgage_balance: number
           notes?: string | null
           on_dnc?: boolean
           outcome?: string | null
           phone_e164: string
           policy_value?: number | null
+          product: string
           state: string
           status?: Database["public"]["Enums"]["lead_status"]
           temperature: Database["public"]["Enums"]["lead_temperature"]
@@ -196,7 +199,9 @@ export type Database = {
           age?: number
           agent_id?: string | null
           best_time_to_call?: Database["public"]["Enums"]["time_of_day"]
+          brand?: string
           created_at?: string
+          details?: Json
           email?: string
           fbc?: string | null
           fbclid?: string | null
@@ -205,16 +210,14 @@ export type Database = {
           first_name?: string
           id?: string
           intent_score?: number
-          is_homeowner?: boolean
-          is_smoker?: boolean
           landing_page_variant?: string | null
           last_name?: string
-          mortgage_balance?: number
           notes?: string | null
           on_dnc?: boolean
           outcome?: string | null
           phone_e164?: string
           policy_value?: number | null
+          product?: string
           state?: string
           status?: Database["public"]["Enums"]["lead_status"]
           temperature?: Database["public"]["Enums"]["lead_temperature"]
@@ -239,6 +242,7 @@ export type Database = {
           id: string
           phone_e164: string | null
           reason: string
+          source_brand: string | null
           suppressed_at: string
         }
         Insert: {
@@ -246,6 +250,7 @@ export type Database = {
           id?: string
           phone_e164?: string | null
           reason: string
+          source_brand?: string | null
           suppressed_at?: string
         }
         Update: {
@@ -253,6 +258,7 @@ export type Database = {
           id?: string
           phone_e164?: string | null
           reason?: string
+          source_brand?: string | null
           suppressed_at?: string
         }
         Relationships: []

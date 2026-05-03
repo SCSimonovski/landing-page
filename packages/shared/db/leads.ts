@@ -7,20 +7,26 @@ type LeadRow = Database["public"]["Tables"]["leads"]["Row"];
 // Strongly-typed input for the insert_lead_with_consent RPC. The function
 // signature in the migration takes a single jsonb payload; this type is the
 // shape the route handler builds before serializing.
+//
+// Post-multi-brand-migration (2026-05-03): the per-product qualifying fields
+// (mortgage_balance, is_smoker, is_homeowner for Northgate) live inside the
+// `details` JSONB. Top-level fields stay reserved for brand-agnostic
+// demographics + control fields. `brand` and `product` are text discriminators
+// validated at the app layer (no DB-level enum). See AGENTS.md § 6.
 export type LeadInsertInput = {
   first_name: string;
   last_name: string;
   phone_e164: string;
   email: string;
   state: string;
-  mortgage_balance: number;
   age: number;
-  is_smoker: boolean;
-  is_homeowner: boolean;
   best_time_to_call: "morning" | "afternoon" | "evening";
   intent_score: number;
   temperature: "hot" | "warm" | "cold";
   on_dnc: boolean;
+  brand: string;
+  product: string;
+  details: Record<string, Json>;
   consent_text: string;
   form_version: string;
   ip_address: string;

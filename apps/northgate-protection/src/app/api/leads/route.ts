@@ -104,20 +104,29 @@ export async function POST(req: Request) {
     // 10. Atomic insert via RPC: leads + consent_log + lead_events('created').
     //     Server uses its OWN consent text constant — client-sent values are
     //     ignored even if present (defense against tampering).
+    // Per-product qualifying fields go into details JSONB
+    // (post-multi-brand-migration 2026-05-03). brand + product are text
+    // discriminators; this app is hard-coded to northgate-protection /
+    // mortgage_protection. Plan 2 will scaffold apps/final-expense/ which
+    // populates these differently.
     const insertInput: LeadInsertInput = {
       first_name: input.first_name,
       last_name: input.last_name,
       phone_e164,
       email,
       state: input.state,
-      mortgage_balance: input.mortgage_balance,
       age: input.age,
-      is_smoker: input.is_smoker,
-      is_homeowner: input.is_homeowner,
       best_time_to_call: input.best_time_to_call,
       intent_score,
       temperature,
       on_dnc,
+      brand: "northgate-protection",
+      product: "mortgage_protection",
+      details: {
+        mortgage_balance: input.mortgage_balance,
+        is_smoker: input.is_smoker,
+        is_homeowner: input.is_homeowner,
+      },
       consent_text: CONSENT_TEXT,
       form_version: FORM_VERSION,
       ip_address: ip,
