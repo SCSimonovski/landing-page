@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 170" width="320" height="170">
+  <g transform="translate(136, 10)">
+    <path d="M 0,62 L 0,18 A 24,18 0 0 1 48,18 L 48,62 Z M 9,62 L 9,28 A 15,14 0 0 1 39,28 L 39,62 Z" fill="#14253A" fill-rule="evenodd"/>
+  </g>
+  <text x="160" y="115" text-anchor="middle" style="font-family: Georgia, 'Times New Roman', serif; font-size: 30px; font-weight: 500; fill: #14253A; letter-spacing: 0.18em;">NORTHGATE</text>
+  <text x="160" y="140" text-anchor="middle" style="font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11px; fill: #B85541; letter-spacing: 0.42em; font-weight: 500;">HERITAGE</text>
+</svg>

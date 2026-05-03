@@ -91,8 +91,8 @@ The repo is a pnpm workspace. Workspace package `@platform/shared` holds the sha
 
 ```
 apps/
-  northgate-protection/    ← mortgage protection landing page (current)
-  <future second brand>/   ← scaffolded when the second product is chosen
+  northgate-protection/    ← mortgage protection landing page (Meridian direction)
+  northgate-heritage/      ← final expense landing page (Hearth direction)
   platform/                ← agent platform (Phase 2)
 packages/
   shared/                  ← @platform/shared (workspace internal)
@@ -108,9 +108,9 @@ packages/
 
 App imports look like `@platform/shared/db/leads`, `@platform/shared/validation/common`, etc. Internal cross-references inside `packages/shared/` use relative paths (`./supabase-server`, `../db/leads`). The shared package ships raw `.ts` source — `apps/northgate-protection/next.config.ts` adds `transpilePackages: ["@platform/shared"]` so Next compiles it on demand (no build step). The vendor-adapter (twilio/, resend/) vs business-action (sms/, email/) split is intentional: adapters can change independently of the action layer.
 
-**Per-product vs per-app vs shared placement (post-Plan-2a):**
-- **Per-app** (`apps/<app>/src/lib/`): brand-/product-specific code that varies between apps. Northgate Protection has its own `consent.ts` (CONSENT_TEXT verbatim per brand), `intent.ts` (computeIntentScore weights mortgage-specific fields), and `validation/lead-schema.ts` (form-shaped Zod schema with MP-specific fields). Heritage will have its own copies in Plan 2b.
-- **Per-product, shared** (`packages/shared/{validation/details,twilio/templates,email/templates}/<product>.ts`): the canonical shape + render of one product, reused across any app that submits that product. SMS + email dispatchers in `packages/shared/twilio/messages.ts` and `packages/shared/email/welcome.ts` route by `lead.product` to the right per-product file.
+**Per-product vs per-app vs shared placement (post-Plan-2b):**
+- **Per-app** (`apps/<app>/src/lib/`): brand-/product-specific code that varies between apps. Each app has its own `consent.ts` (brand-specific CONSENT_TEXT — NP says "mortgage protection"; Heritage says "final expense"), `intent.ts` (NP weights mortgage_balance + age 30-50; Heritage weights desired_coverage + age 60-75), and `validation/lead-schema.ts` (NP has 3 product fields + 18-75 age range; Heritage has 4 product fields + 50-85 age range).
+- **Per-product, shared** (`packages/shared/{validation/details,twilio/templates,email/templates}/<product>.ts`): the canonical shape + render of one product, reused across any app that submits that product. SMS + email dispatchers in `packages/shared/twilio/messages.ts` and `packages/shared/email/welcome.ts` route by `lead.product` to the right per-product file. NP's leads route to `mortgage_protection.ts`; Heritage's leads route to `final_expense.ts`.
 - **Brand-agnostic, shared** (`packages/shared/`): infrastructure both brands need identically — DB helpers, suppressions/DNC, phone normalization, rate-limit, Twilio client + signature verify, Resend client, common Zod primitives (`US_STATES`, refinements).
 
 ---
@@ -193,12 +193,12 @@ After build: update § 9 here (next task), append an entry to `docs/CHANGELOG.md
 
 - **Env-var changes are 5-place updates.** When adding or rotating any env var:
   1. Root `.env.local` (for Supabase CLI, scripts/, gen:types)
-  2. `apps/northgate-protection/.env.local` (for NP's `next dev` / `next build`)
-  3. `apps/northgate-heritage/.env.local` (for Heritage's `next dev` / `next build`, post-Plan-2b)
+  2. `apps/northgate-protection/.env.local` (for NP's `next dev --port 3000` / `next build`)
+  3. `apps/northgate-heritage/.env.local` (for Heritage's `next dev --port 3001` / `next build`)
   4. Vercel: Northgate Protection project's Environment Variables
-  5. Vercel: Northgate Heritage project's Environment Variables (post-Plan-2b)
+  5. Vercel: Northgate Heritage project's Environment Variables
 
-  Run `pnpm verify-envs` before pushing to confirm the local-side three are in sync (key sets only — values legitimately differ per environment). Vercel-side requires manual per-project dashboard verification. **After any rotation, redeploy each Vercel project** to pick up the new value (Vercel does NOT auto-redeploy on env-var changes). Pre-Plan-2b this is effectively a 3-place rule (root + NP-local + NP-Vercel); the rule grows to 5 places when Heritage's `.env.local` and Vercel project land.
+  Run `pnpm verify-envs` before pushing to confirm the local-side three are in sync (key sets only — values legitimately differ per environment). Vercel-side requires manual per-project dashboard verification. **After any rotation, redeploy each Vercel project** to pick up the new value (Vercel does NOT auto-redeploy on env-var changes). Currently 18 keys × 3 local locations.
 
 ---
 
@@ -234,9 +234,9 @@ See `docs/CHANGELOG.md`.
 
 ### Next immediate task
 
-**Plan 2b: scaffold `apps/northgate-heritage/`.** Plan 2a (per-product template + per-app library refactors) shipped on 2026-05-03 with all three parity gates green and the dispatcher pattern wired — see CHANGELOG. Plan 2b is the architect-required follow-up: scaffold the second consumer brand under the same LLC as a sibling Next.js app at `apps/northgate-heritage/`, sharing infrastructure via `@platform/shared` but with its own UI, copy, env, and Vercel project. Architect-locked spec: directory `apps/northgate-heritage/` (Hearth visual direction — design templates from prior Northgate brand pass, reused here as sibling brand), full FE qualifying set (5–7 fields including age, smoker, desired coverage, basic health questions, beneficiary relationship), FE-shaped intent score in `apps/northgate-heritage/src/lib/intent.ts`, FE consent text in `apps/northgate-heritage/src/lib/consent.ts`, FE form-shaped Zod schema in `apps/northgate-heritage/src/lib/validation/lead-schema.ts`, and population of the placeholder Plan 2a left at `packages/shared/{validation/details,twilio/templates,email/templates}/final_expense.ts`. New Vercel project for Heritage with its own `.env.local` (5-place env-var rule activates).
+**Meta Pixel client-side install.** Plan 2b (Heritage scaffold + FE template population + new Vercel project) shipped on 2026-05-03 — see CHANGELOG. Heritage is live in local dev (`pnpm --filter northgate-heritage dev` on port 3001) and ready for its Vercel project once user completes the deploy checklist in CHANGELOG. With both brands now scaffolded, the Pixel install path is unblocked: install the Pixel base code via the Next.js Script component on each brand's `<RootLayout>` (per-app, gated on `process.env.NEXT_PUBLIC_META_PIXEL_ID` being set), fire the standard `PageView` on every page load, fire `Lead` on form submit success in each `<LeadForm>`. Privacy-policy update needed too — both brands' `/privacy` page mention Meta sharing but specifics need attorney review (already on the launch checklist below).
 
-Subsequent tasks (rough order, not committed): Meta Pixel client-side install (still blocked on Heritage being live for verification against the right URL); server-side Meta CAPI dispatch (`/api/leads` `Promise.all` third entry); daily DNC scrub cron (populates `dnc_registry` from the FTC list); replace placeholder copy + draft consent text + draft `/privacy` + `/terms` content with attorney-reviewed final versions; register custom consumer domains for both brands (gates on LLC + brand); `mpl-prod` Supabase project + baseline migration replay (deferred until launch is imminent — free-tier projects pause after 7 days of inactivity).
+Subsequent tasks (rough order, not committed): server-side Meta CAPI dispatch (`/api/leads` `Promise.all` third entry — fires alongside SMS + email); daily DNC scrub cron (populates `dnc_registry` from the FTC list, brand-agnostic); replace placeholder copy + draft consent text + draft `/privacy` + `/terms` content with attorney-reviewed final versions (joint pass across both brands); register custom consumer domains for both brands (gates on LLC + brand); `mpl-prod` Supabase project + baseline migration replay (deferred until launch is imminent — free-tier projects pause after 7 days of inactivity).
 
 **Vercel deploy posture (current):** Public URL is `https://northgateprotection.vercel.app` (renamed from the auto-generated slug early in the deploy task). This is a **public-URL dev environment, NOT launch.** Vercel's production env points at `mpl-dev` (the only Supabase project we have). Real launch requires `mpl-prod` + custom domain + LLC + A2P 10DLC + attorney-reviewed text. CT-log scanners WILL find the `*.vercel.app` URL; expect junk lead accumulation in `mpl-dev` from automated probes (mitigations: rate limits already in place, mpl-dev gets dropped before launch). Twilio webhook now points at the Vercel URL; outbound SMS still A2P-blocked at the carrier.
 
@@ -245,7 +245,9 @@ Subsequent tasks (rough order, not committed): Meta Pixel client-side install (s
 **Outstanding launch checklist (paperwork-blocked, NOT routine follow-ups):**
 - **Live STOP webhook end-to-end test** — Vercel deploy unblocked the infrastructure side (Twilio webhook now points at the live handler); test itself is deferred to next session with verified phone access. Validates Twilio → DNS → Vercel → handler → `suppressions` insert end-to-end, plus the backstop check (re-submit lead with STOP'd phone → silent 200, no lead created).
 - **Hero imagery: Meridian uses the brand-mark arch as graphic, NOT photography.** Eliminated the "real hero photo before SAC" gate from the prior brand pass. Trade-off per playbook 02 Part 2.5 (real photos beat stock by ~20%; no-photo "almost certainly underperforms even stock") is acknowledged and accepted: the brand-mark editorial approach reads as intentional design rather than missing image. **Watch-item, not blocker for NP:** if SAC/CAC numbers post-launch don't justify the editorial choice, fallback is to swap `<ArchMotif>` for a real architectural-detail photo. Decision-point comes after the first ad-test cohort; not a launch-readiness gate.
-- **Hero imagery for Heritage (post-Plan-2b): firm SAC blocker, NOT a watch-item.** Hearth visual direction *expects* photography; the diagonal-stripe/brand-mark fallback that works as intentional editorial in Meridian reads as "design unfinished" in Hearth. Heritage launch checklist must treat real hero photography as a hard prerequisite for SAC submission, not a post-launch optimization. Capture this in Plan 2b's launch-readiness gate when that plan lands.
+- **Hero imagery for Heritage:** editorial composition (diagonal-stripe rectangle + "Home · Table · Quiet hour" overlay + dark-navy "THE POINT" callout box) per the user-supplied design direction. Same posture as NP's Meridian — intentional editorial choice, not "design unfinished." Real photography is an optional future enhancement, not a firm SAC blocker. Decision-point comes after the first ad-test cohort (mirror NP's `<ArchMotif>` posture in playbook 02 Part 2.5).
+- **Heritage A2P 10DLC second number** — deferred. Heritage shares NP's `TWILIO_FROM_NUMBER`. STOPs from Heritage SMS recipients land on NP's webhook with `source_brand='northgate-protection'`; the gap is documented in the 2026-05-03 Plan 2a CHANGELOG entry as a known compliance imprecision (suppression *enforcement* stays cross-brand and correct; *attribution* on the suppression row is unreliable for "which brand triggered the STOP" — answer comes from Twilio's API message log). Provision a separate number when Heritage volume justifies the ~2-6 week separate A2P 10DLC application timeline.
+- **Heritage `AGENT_PHONE_NUMBER`** — currently same as NP per Plan 2b Decision #11 (Phase 1 one-agent commitment per § 1 + § 7). If business model changes pre-Phase-2 to separate buying agent per brand, treat as a normal 5-place env-var rotation.
 - **Form "~50s left" indicator.** Borderline false-urgency framing (architect-flagged) kept in for now per developer call to "see how it looks" in preview. Revisit after live preview review — drop entirely or reword to "About 50 seconds total" (descriptive, non-pressuring).
 - **Real attorney-reviewed legal text** — replaces the v1-draft consent text (playbook 4.3) AND the placeholder content on `/privacy` + `/terms` (currently a yellow-banner draft with bracket-marker `[PLACEHOLDER]` slots throughout). Legal review is one cross-cutting task, not three.
 - Twilio A2P 10DLC registration — needs LLC + EIN. Until done, outbound SMS is silently dropped at the carrier (Twilio API returns success; messages show `status=undelivered` with carrier error 30034 for long-codes / 30032 for toll-free TFV). Code is right; delivery is paperwork-blocked.
