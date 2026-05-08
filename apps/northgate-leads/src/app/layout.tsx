@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MPL Platform",
+  title: "Northgate Leads",
   description: "Internal lead management for licensed agents.",
 };
 
@@ -41,14 +41,14 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <header className="border-b border-border bg-background">
           <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
-            <Link href="/leads" aria-label="MPL Platform home" className="block">
+            <Link href="/leads" aria-label="Northgate Leads home" className="block">
               <Image
-                src="/platform-logo.svg"
-                alt="MPL Platform"
+                src="/northgate-leads-logo.svg"
+                alt="Northgate Leads"
                 width={280}
-                height={60}
+                height={80}
                 priority
-                className="h-8 w-auto"
+                className="h-10 w-auto"
               />
             </Link>
             {user && (

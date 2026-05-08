@@ -93,7 +93,7 @@ The repo is a pnpm workspace. Workspace package `@platform/shared` holds the sha
 apps/
   northgate-protection/    ← mortgage protection landing page (Meridian direction)
   northgate-heritage/      ← final expense landing page (Hearth direction)
-  platform/                ← agent platform (Phase 2 v0.1: Supabase Auth + cross-brand leads table)
+  northgate-leads/         ← agent platform (Phase 2 v0.1: Supabase Auth + cross-brand leads table)
 packages/
   shared/                  ← @platform/shared (workspace internal)
     db/                    ← Supabase clients + leads/suppressions helpers (server-only)
@@ -199,10 +199,10 @@ After build: update § 9 here (next task), append an entry to `docs/CHANGELOG.md
   1. Root `.env.local` (for Supabase CLI, scripts/, gen:types, `test-platform-rls.ts`)
   2. `apps/northgate-protection/.env.local` (for NP's `next dev --port 3000` / `next build`)
   3. `apps/northgate-heritage/.env.local` (for Heritage's `next dev --port 3001` / `next build`)
-  4. `apps/platform/.env.local` (for the agent platform's `next dev --port 3002` / `next build`)
+  4. `apps/northgate-leads/.env.local` (for the agent platform's `next dev --port 3002` / `next build`)
   5. Vercel: Northgate Protection project's Environment Variables
   6. Vercel: Northgate Heritage project's Environment Variables
-  7. Vercel: mpl-platform project's Environment Variables
+  7. Vercel: Northgate Leads project's Environment Variables
 
   Run `pnpm verify-envs` before pushing to confirm the local-side four are in sync (key sets only — values legitimately differ per environment). Vercel-side requires manual per-project dashboard verification. **After any rotation, redeploy each Vercel project** to pick up the new value (Vercel does NOT auto-redeploy on env-var changes). Currently 17 keys × 4 local locations.
 
@@ -212,7 +212,7 @@ After build: update § 9 here (next task), append an entry to `docs/CHANGELOG.md
 
 These are Phase 2 or later. Resist proposing them, and flag clearly if a request would pull us into them:
 
-- Custom admin dashboard *for non-agent operators* (Supabase Studio remains the data-engineer admin UI; the platform at `apps/platform/` is the agent + operator dashboard for lead visibility, post-Plan-3)
+- Custom admin dashboard *for non-agent operators* (Supabase Studio remains the data-engineer admin UI; Northgate Leads at `apps/northgate-leads/` is the agent + operator dashboard for lead visibility, post-Plan-3)
 - Agent self-service signup (invite-only via Supabase Auth + `platform_users` insert per Plan 3)
 - Agent status updates (planned for v0.2 of the platform; v0.1 ships read-only)
 - Multi-agent routing logic — Phase 1 commits to one *buying* agent (the platform may have multiple admin/operator `platform_users`, but lead routing stays single-agent until Phase 2 v1.0 per playbook 03 § 3.4)
@@ -255,7 +255,7 @@ Subsequent tasks (rough order, not committed): server-side Meta CAPI dispatch (`
 - **Hero imagery for Heritage:** editorial composition (diagonal-stripe rectangle + "Home · Table · Quiet hour" overlay + dark-navy "THE POINT" callout box) per the user-supplied design direction. Same posture as NP's Meridian — intentional editorial choice, not "design unfinished." Real photography is an optional future enhancement, not a firm SAC blocker. Decision-point comes after the first ad-test cohort (mirror NP's `<ArchMotif>` posture in playbook 02 Part 2.5).
 - **Heritage A2P 10DLC second number** — deferred. Heritage shares NP's `TWILIO_FROM_NUMBER`. STOPs from Heritage SMS recipients land on NP's webhook with `source_brand='northgate-protection'`; the gap is documented in the 2026-05-03 Plan 2a CHANGELOG entry as a known compliance imprecision (suppression *enforcement* stays cross-brand and correct; *attribution* on the suppression row is unreliable for "which brand triggered the STOP" — answer comes from Twilio's API message log). Provision a separate number when Heritage volume justifies the ~2-6 week separate A2P 10DLC application timeline.
 - **Heritage `AGENT_PHONE_NUMBER`** — currently same as NP per Plan 2b Decision #11 (Phase 1 one-agent commitment per § 1 + § 7). If business model changes pre-Phase-2 to separate buying agent per brand, treat as a normal 7-place env-var rotation (post-Plan-3).
-- **Platform Vercel project setup** — `apps/platform/` is in local dev only until the user creates the Vercel project per the checklist in the 2026-05-04 Plan 3 CHANGELOG entry. Slug: `mpl-platform.vercel.app` (consumer-brand-neutral; matches `mpl-dev` Supabase naming). Includes Supabase Auth Site URL + Redirect URL configuration + pilot-user provisioning steps.
+- **Northgate Leads Vercel project setup** — `apps/northgate-leads/` is in local dev only until the user creates the Vercel project per the checklist in the 2026-05-04 Plan 3 CHANGELOG entry. Slug: `northgateleads.vercel.app` (matches the Northgate consumer-brand naming convention: `northgateprotection`, `northgateheritage`, `northgateleads`). Includes Supabase Auth Site URL + Redirect URL configuration + pilot-user provisioning steps.
 - **Platform custom domain** — gates on LLC + brand decision (same posture as NP/Heritage custom domains).
 - **Platform Supabase Auth custom SMTP via Resend** — deferred per Plan 3 architect demotion. Default Supabase Auth (`noreply@mail.app.supabase.io`) is acceptable for invite-only Phase 1 with small platform user count, but configure custom SMTP via Resend BEFORE inviting the actual pilot agent (Supabase's generic domain lands in spam often enough to make the agent's first impression of the platform "did you get my email" → "check spam"). One Supabase Auth dashboard config screen.
 - **Platform `agent_id` auto-assignment on intake** — currently `/api/leads` doesn't set `agent_id` on inserts, so the pilot agent's leads-table view will be empty until either (a) a backfill SQL populates `agent_id` on existing leads to that agent, or (b) intake is wired to default-assign new leads to the (single) Phase 1 agent. Worth a small follow-up plan when the buying agent is real.

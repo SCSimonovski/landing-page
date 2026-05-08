@@ -6,7 +6,7 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ## 2026-05-04 — Plan 3: Agent platform v0.1 + role-aware RLS
 
-Plan 3 per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. Phase 2 begins. Scaffolds `apps/platform/` (third Next.js app, magic-link auth, cross-brand leads table with filters + pagination), introduces a `platform_users` table to hold all auth-bearing principals (agent / admin / superadmin), and replaces the original tight `leads_select_agent` RLS with role-aware policies. NP + Heritage runtime unchanged. **First time the `authenticated` role gets any grants on the schema** — verified via mandatory grants-vs-RLS test per AGENTS.md § 6.
+Plan 3 per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. Phase 2 begins. Scaffolds `apps/northgate-leads/` (third Next.js app, magic-link auth, cross-brand leads table with filters + pagination), introduces a `platform_users` table to hold all auth-bearing principals (agent / admin / superadmin), and replaces the original tight `leads_select_agent` RLS with role-aware policies. NP + Heritage runtime unchanged. **First time the `authenticated` role gets any grants on the schema** — verified via mandatory grants-vs-RLS test per AGENTS.md § 6.
 
 **Schema changes** (one atomic migration `20260504120000_add_platform_users_and_role_aware_rls.sql`):
 - New `platform_users` table: `(id uuid pk, email text unique check (email = lower(email)), role text check (role in ('agent', 'admin', 'superadmin')), active boolean default true, created_at)`. Email lowercase enforced at the schema layer (CHECK constraint) — load-bearing defense against silent-failure case-mismatch in RLS policies.
@@ -21,8 +21,8 @@ Plan 3 per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-d
 - Naming: policies renamed to reflect role-aware behavior (`leads_select_role_scoped`, etc.) — old `_agent` names no longer fit.
 
 **App code changes** (workspace + new app):
-- New `apps/platform/` Next.js app (~22 files): chassis (eslint, tsconfig, next.config, postcss, package.json, vercel.json, public/platform-logo.svg, favicon, .env.local, middleware.ts), 7 routes (`/`, `/login`, `/leads`, `/auth/callback`, `/auth/signout`, `/api/health`, error boundary), 5 components (`lead-table`, `filter-bar`, `pagination`, `sign-out-button`, `badge`), Supabase clients (`server.ts`, `browser.ts`, `middleware.ts`), `auth/get-platform-user.ts` (RPC to `current_platform_user`), `lib/leads-query.ts` (pure builder), `lib/url-params.ts` (pure helpers), tests for both.
-- `apps/platform/package.json` adds `@supabase/ssr` + `@supabase/supabase-js` deps. Pinned `dev` script to `--port 3002`.
+- New `apps/northgate-leads/` Next.js app (~22 files): chassis (eslint, tsconfig, next.config, postcss, package.json, vercel.json, public/platform-logo.svg, favicon, .env.local, middleware.ts), 7 routes (`/`, `/login`, `/leads`, `/auth/callback`, `/auth/signout`, `/api/health`, error boundary), 5 components (`lead-table`, `filter-bar`, `pagination`, `sign-out-button`, `badge`), Supabase clients (`server.ts`, `browser.ts`, `middleware.ts`), `auth/get-platform-user.ts` (RPC to `current_platform_user`), `lib/leads-query.ts` (pure builder), `lib/url-params.ts` (pure helpers), tests for both.
+- `apps/northgate-leads/package.json` adds `@supabase/ssr` + `@supabase/supabase-js` deps. Pinned `dev` script to `--port 3002`.
 - `packages/shared/types/database.ts` regenerated via `pnpm gen:types` — picked up new `platform_users` table + dropped `agents.email`/`active` + new `current_platform_user` function. NP + Heritage `LeadInsertInput` doesn't reference any of these; consumer apps unchanged.
 - Root devDeps: `jsonwebtoken` + `@types/jsonwebtoken` added for `scripts/test-platform-rls.ts` (signs JWTs locally to exercise authenticated RLS contexts).
 
@@ -34,7 +34,7 @@ Plan 3 per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-d
 - Filters: brand, product, temperature, date range. Plus agent (admin/superadmin only). NO search/state/score-range — defer until lead volume justifies (v0.3 territory).
 - Per-product details rendering: inline switch in `<LeadTable>` for v1; refactor to shared on second use site.
 - Visual direction: utilitarian neutral palette (slate/white/blue accent). Brand colors only as in-table badges.
-- Vercel project slug: `mpl-platform.vercel.app` (consumer-brand-neutral; matches `mpl-dev` Supabase naming).
+- Vercel project slug: `northgateleads.vercel.app` (matches the Northgate family: `northgateprotection`, `northgateheritage`, `northgateleads`).
 - Magic-link email sender: default Supabase Auth — custom SMTP via Resend deferred to follow-up (architect call; configure before pilot agent activation for deliverability).
 - Multi-agent guardrail: OBSOLETE — role-aware RLS isolates agents by design.
 - RLS policy performance: InitPlan-optimized `(select ...)` wrappers around `auth.jwt()` AND the `exists` subqueries.
@@ -43,12 +43,12 @@ Plan 3 per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-d
 - Sequencing: TWO commits on the branch (migration+verification first, then app). Single PR.
 
 **Verification — all PASS:**
-- `pnpm --filter platform lint` clean (0 errors).
-- `pnpm --filter platform build` clean. Route table: 7 dynamic routes (all read session) + middleware. No static routes (auth check at the top of every page).
+- `pnpm --filter northgate-leads lint` clean (0 errors).
+- `pnpm --filter northgate-leads build` clean. Route table: 7 dynamic routes (all read session) + middleware. No static routes (auth check at the top of every page).
 - `pnpm --filter northgate-protection lint && build` clean — NP runtime unchanged.
 - `pnpm --filter northgate-heritage lint && build` clean — Heritage runtime unchanged.
 - `pnpm verify-envs` clean — 4 locations × 17 keys (becomes × 18 once user adds `SUPABASE_JWT_SECRET` for the RLS verification script).
-- `pnpm test` clean — vitest suite gains `apps/platform/src/lib/{leads-query,url-params}.test.ts` (~34 new assertions). Total: 9 files / 148 tests / 286ms.
+- `pnpm test` clean — vitest suite gains `apps/northgate-leads/src/lib/{leads-query,url-params}.test.ts` (~34 new assertions). Total: 9 files / 148 tests / 286ms.
 - Migration applied to `mpl-dev` cleanly. Initial attempt failed (drop column ordered before policy drop → SQLSTATE 2BP01); fixed by reordering in the migration file (drop policies between backfill and column-drop). Apply was atomic — no partial state.
 
 **Migration verification (per AGENTS.md § 6, mandatory):** new `scripts/test-platform-rls.ts` (8 assertions, role fixtures: superadmin / admin / agent A + B with their `agents` rows; deterministic test leads). **Critical mechanism:** the existing `test-dispatch-suppression.ts` uses service-role which bypasses RLS — useless for testing RLS. The new script creates real test users via `auth.admin.createUser` (Admin API) and signs them in via `signInWithPassword` on per-user anon clients — Supabase issues real JWTs scoped to each user; queries run under their RLS context. Pattern matches Bookr project's `tests/helpers/users.ts`. Local JWT signing with the Legacy JWT Secret was the initial approach (Plan 3 part 1 first commit) but rejected per architect call: Supabase has flagged the Legacy JWT Secret as legacy in favor of asymmetric RS256/ES256 signing on new projects, so building new code against a deprecation path was the wrong call. The Admin API approach is robust against any future change in JWT signing (asymmetric vs symmetric, key rotation) and stays uniform with Bookr's testing pattern.
@@ -65,11 +65,11 @@ Plan 3 per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-d
 
 **Vercel project setup checklist (user-side ops, deferred to user execution):**
 1. Vercel dashboard → New Project → import from GitHub.
-2. Project name: `mpl-platform` (consumer-brand-neutral).
+2. Project name: `northgate-leads` (matches the Northgate consumer-brand naming: `northgate-protection`, `northgate-heritage`, `northgate-leads`).
 3. Root Directory: `apps/platform`.
 4. Build / Install Commands: defaults (Vercel detects pnpm workspaces).
-5. Environment Variables: copy from NP project. Notes: Supabase / Twilio / Resend / Upstash / Meta / AGENT_PHONE_NUMBER copied for env-key parity (platform doesn't read most). `HEALTH_CHECK_SECRET`: ROTATE FRESH (don't reuse NP/Heritage values; one was rotated for local dev — `e3e2958ea56f70f9b319efa626a2a1fb`). Set `NEXT_PUBLIC_SITE_URL=https://mpl-platform.vercel.app` after step 6.
-6. Deploy. Rename Vercel slug to `mpl-platform.vercel.app`. Update `NEXT_PUBLIC_SITE_URL` to match. Trigger redeploy.
+5. Environment Variables: copy from NP project. Notes: Supabase / Twilio / Resend / Upstash / Meta / AGENT_PHONE_NUMBER copied for env-key parity (platform doesn't read most). `HEALTH_CHECK_SECRET`: ROTATE FRESH (don't reuse NP/Heritage values; one was rotated for local dev — `e3e2958ea56f70f9b319efa626a2a1fb`). Set `NEXT_PUBLIC_SITE_URL=https://northgateleads.vercel.app` after step 6.
+6. Deploy. Rename Vercel slug to `northgateleads.vercel.app`. Update `NEXT_PUBLIC_SITE_URL` to match. Trigger redeploy.
 7. Supabase Auth setup (one-time per Supabase project): Authentication → URL Configuration → Site URL = platform's prod URL + add `/auth/callback` to Redirect URLs.
 8. **Provision yourself as superadmin:** Supabase dashboard → Authentication → Users → Invite (lowercase email). SQL: `insert into platform_users (email, role) values ('you@example.com', 'superadmin');`
 9. **Provision the pilot agent** (atomic two-table insert):
@@ -83,12 +83,12 @@ Plan 3 per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-d
    select id, 'Agent Name', '{"TX","FL"}'::text[] from new_pu;
    ```
 10. **Optional: provision an admin** — same as superadmin but `role='admin'`.
-11. Verify: `curl -H "x-health-secret: <PLATFORM_HEALTH_CHECK_SECRET>" https://mpl-platform.vercel.app/api/health` → `{"ok":true}`.
+11. Verify: `curl -H "x-health-secret: <PLATFORM_HEALTH_CHECK_SECRET>" https://northgateleads.vercel.app/api/health` → `{"ok":true}`.
 
 **Phase 1 reality check:** if `agent_id` auto-assignment on intake isn't wired, the pilot agent's table is empty. Either (a) backfill `agent_id` on existing leads, (b) wire intake-side assignment as a follow-up, or (c) accept the agent only sees leads created after assignment ships. Captured in AGENTS.md § 9 launch checklist.
 
 **AGENTS.md updates:**
-- § 4 repo tree: `apps/platform/` annotated with "Phase 2 v0.1: Supabase Auth + cross-brand leads table".
+- § 4 repo tree: `apps/northgate-leads/` annotated with "Phase 2 v0.1: Supabase Auth + cross-brand leads table".
 - § 4 placement note unchanged (consumer-app-focused; platform doesn't fit the per-product-vs-per-app vs shared dimension).
 - § 5 Tests paragraph: updated test count + mention of `test-platform-rls.ts` + JWT-signing mechanism.
 - § 6 Schema discipline: added Role-aware RLS pattern note + `platform_users.email` lowercase CHECK note.
@@ -463,7 +463,7 @@ Pure mechanical refactor per AGENTS.md § 4 + the architect-approved plan at `.c
 - **`.npmrc` added at repo root** with `public-hoist-pattern[]=*eslint*` and `public-hoist-pattern[]=*next*`. Standard pnpm-monorepo workaround for `eslint-config-next` not being able to resolve its `next` peer-dep from the strict-isolated `.pnpm` store.
 - **Dep split corrected mid-execution:** the original plan had `eslint`, `eslint-config-next`, `@types/{node,react,react-dom}`, `tailwindcss`, `@tailwindcss/postcss` at workspace root. They actually belong with the app because `eslint-config-next` peer-deps on `next` (which lives in the app). Final split — root devDeps: `supabase`, `typescript`. App devDeps: eslint chain + `@types/*` + tailwind chain. Shared runtime: vendor SDKs (`@supabase/supabase-js`, `@upstash/{ratelimit,redis}`, `libphonenumber-js`, `resend`, `server-only`, `twilio`, `zod`).
 - **`.env.local` exists in two locations** now: repo root (for Supabase CLI, `gen:types`, `scripts/test-dispatch-suppression.ts`, the `set -a; source .env.local` pattern) AND `apps/northgate-protection/.env.local` (for Next dev/build, since Next 16 loads env relative to `next.config.ts` and doesn't walk up to workspace root). **Operational rule: when rotating any secret or adding a new env var, update both copies.** Both gitignored via `.env*`. Long-term — revisit if the count of duplicate env files grows to 3+ apps; potential successors are direnv, a small "sync env to apps" script, or moving to a single canonical location with all tools wired to read from there.
-- **`transpilePackages: ["@platform/shared"]`** in `apps/northgate-protection/next.config.ts`. The shared package exports raw `.ts` source (no build step) — Next compiles it on demand. Tradeoff vs adding a tsc/tsup build to shared: `transpilePackages` is simpler for a small workspace; build step is more conventional but adds build orchestration, watch mode, source maps. Per-app transpilation cost will roughly double once `apps/platform/` lands as a second consumer; not a real concern at our scale. Fallback if lint/build resolution issues surface later: add a tsup build step to shared.
+- **`transpilePackages: ["@platform/shared"]`** in `apps/northgate-protection/next.config.ts`. The shared package exports raw `.ts` source (no build step) — Next compiles it on demand. Tradeoff vs adding a tsc/tsup build to shared: `transpilePackages` is simpler for a small workspace; build step is more conventional but adds build orchestration, watch mode, source maps. Per-app transpilation cost will roughly double once `apps/northgate-leads/` lands as a second consumer; not a real concern at our scale. Fallback if lint/build resolution issues surface later: add a tsup build step to shared.
 - **`@platform/shared` exports field has 16 entries** (per-file granularity). Easy to maintain now; consider a barrel-export pattern (`./db` re-exports `./db/index.ts`) as a follow-up if every new shared file requires an entry. Not needed now.
 - **Windows operational note:** `taskkill //F //PID <pid>` was needed to release file locks on `src/app/` after the `pnpm dev` background process didn't fully die via `TaskStop`. Next dev server child processes don't always propagate signals cleanly on Windows; if a future workspace-restructure operation hits "Permission denied" on `src/`-tree mv operations, that's the cause.
 - **Mid-execution snag (caught and fixed):** `git mv src/app apps/northgate-protection/src/app` initially nested as `apps/.../src/app/app/api/...` because my `mkdir -p` had pre-created the destination. Fixed by lifting `app/api` up one level. Final structure correct.
