@@ -4,6 +4,104 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-05-09 — Plan 4 polish pass (palette, filters, sortable headers, pending-invite, cursor, hydration)
+
+Same `shadcn-refactor` branch — picked up the previous day's UI smoke feedback. No schema or RLS changes.
+
+- **Custom palette** replacing the initial shadcn slate base. Warm-stone neutrals (oklch hue ~70) instead of cool slate (~260) — reads less "Bootstrap admin." Primary is a deep desaturated sage (oklch 0.42 0.05 165) that connects subtly to the consumer-side NP brand without going on-brand. Sidebar gets a slight sage tint to read as its own surface. `--link` / `--link-hover` kept distinct from `--primary` so phone/email links in the leads table don't visually compete with primary CTAs. Brand badges (NP / Heritage / temperature) preserved verbatim.
+- **Logo recolored** to match NP family: arch + NORTHGATE in `#1F2A28` (same deep-forest ink as Northgate Protection's foreground), LEADS subline in `#4F7263` (deep sage matching the platform's primary). Cohesive across all three apps.
+- **SidebarTrigger moved into the sidebar header** (previously sat in a separate top bar inside SidebarInset). When the sidebar is icon-collapsed, the trigger is the only element that fits — so it stays clickable to expand.
+- **Filter UX overhaul** — replaced the always-visible Plan-4-day-1 chip rows with per-category dropdowns (Linear / Airtable style). Each filter (Brand, Product, Temperature, Created, Agent) is its own button → opens a popover with checkboxes (multi-select) or check-icon list (single-select for Created). Active count badge on the trigger; "Clear" inside each popover; "Reset all" on the right when any filter is active. URL is still source of truth — every toggle is `router.push`. Multi-value supported end-to-end: `?brand=x&brand=y` → `parseFilters` returns arrays → `buildLeadsQuery` uses `.in()` (and `.or()` for the unassigned-mixed-with-agents case).
+- **Sortable column headers**. Click Created / Name / State / Age / Score → cycles asc → desc → cleared (back to default `created_at desc`). Faded `↕` icon for sortable-but-inactive; solid `↑` / `↓` for the active column. URL: `?sort=age&dir=desc`. Whitelist on the server (`SORT_COLUMNS`) — typo'd or malicious sort columns are silently ignored, so `.order()` never sees an arbitrary string.
+- **Pending-invite state on /users**. Plan-4-day-1's `Status: Active` + `Joined: today` was misleading for a freshly-invited user — `platform_users.active` is an admin toggle, not a "completed onboarding" signal. Now reads `auth.users.email_confirmed_at` via service-role `auth.admin.listUsers` and shows three states: **Active** (green) when confirmed, **Pending invite** (amber) when invited but not accepted, **Inactive** (muted) when the admin disabled the account. The Joined column labels itself per row: "Invited X" for pending, "Joined X" for accepted.
+- **Cursor pointer on shadcn buttons** — added `cursor-pointer` to the Button cva base + `sidebarMenuButtonVariants`. shadcn intentionally omits this per HTML semantics, but users expect pointer cursors on clickable buttons. `disabled:cursor-not-allowed` for disabled state.
+- **Hydration fixes for `asChild` composition with React 19 + radix-ui v1.4.** Multi-level Slot composition (e.g., `<DropdownMenuTrigger asChild><SidebarMenuButton>...</SidebarMenuButton></DropdownMenuTrigger>` or `<SidebarMenuButton asChild><Link>...</Link></SidebarMenuButton>`) produced server/client diffs in dev. Established rule across the branch: shadcn primitives are used either alone (no asChild) OR composed with native HTML / `next/link` only — never with another shadcn primitive via asChild. `sidebarMenuButtonVariants` extracted from the `"use client"` `sidebar.tsx` into a sibling `sidebar-variants.ts` so Server Components (and the rewired DropdownMenuTrigger / nav links) can apply the classes directly.
+- **Vitest** total: 10 files / 187 tests (12 new tests across multi-value parsing, sort cycling, agent-unassigned `.or()` query shape).
+
+---
+
+## 2026-05-08 — Plan 4: Northgate Leads UI v0.2 (shadcn refactor + Invite User + User Management)
+
+Plan 4 per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. **Full UI overhaul of `apps/northgate-leads/`** — chrome + leads table + auth forms + badges + filter bar all migrated to shadcn/ui. Adds a persistent sidebar shell, `/users` page (admin/superadmin only), in-app **Invite User** dialog (replaces the manual SQL provisioning workflow from Plan 3), and closes the dead-error-param gap that Plan 3 introduced (`/login` redirects with `?error=...` had no display surface). NP + Heritage runtime unchanged. **No schema or RLS migrations** — Plan 3's posture preserved.
+
+**App-shell + routing:**
+- New Next.js route group `(auth)/` holds `/login` + `/auth/{setup,forgot,reset}-password` chromeless (logo-only header, no sidebar). Existing routes preserved (URL paths unchanged — route groups don't add URL segments).
+- Root `app/layout.tsx` now wraps signed-in routes in shadcn `<SidebarProvider>` + `<AppSidebar>` + `<SidebarInset>`. Auth routes branch out via the `(auth)/layout.tsx` override.
+- **Server-side cookie read for first paint** — `cookies()` reads `sidebar_state` and passes to `<SidebarProvider defaultOpen={...}>`. Without this, every navigation flashed the default open state before client hydration corrected it.
+- `<AppSidebar>` is a server component, role-aware: Leads link always; **Users link only for admin/superadmin** (server-side conditional render — RLS already isolates server-side; UI matches).
+- Sidebar footer has a `<DropdownMenu>` with the signed-in email + sign-out form (posts to existing `/auth/signout` route handler from Plan 3).
+- `<Toaster />` (shadcn Sonner) mounted in root layout, NOT in the auth-group layout — toasts surface from anywhere in the authed app.
+
+**UI refactor (full overhaul):**
+- shadcn primitives installed: button, input, label, form, table, badge, dialog, sidebar, card, separator, sheet, select, sonner, dropdown-menu, tooltip, skeleton, checkbox. Lives in `src/components/ui/` (copy-paste model — no version-pin headaches).
+- `src/lib/utils.ts` adds the standard `cn` helper (clsx + tailwind-merge).
+- `globals.css` rewritten with shadcn slate tokens (OKLCH per Tailwind v4 convention) + the brand-color badge tokens preserved verbatim from Plan 3.
+- `<Badge>` extended with brand/product/temp/dnc cva variants. Helpers `brandVariant` / `productVariant` / `tempVariant` (+ `*Label` companions) live in the same file. Old `components/badge.tsx` deleted.
+- `<FilterBar>` chips now `<Button asChild variant={active ? "default" : "outline"} size="sm">` wrapping `<Link>` — preserves Plan 3's URL-as-state pattern (server-rendered, no client interactivity layer).
+- `<LeadTable>` migrated to shadcn `<Table>` primitives. Same column logic, same admin-only Assigned column conditional. DNC column renders `<Badge variant="dnc">` instead of the inline red dot.
+- `<Pagination>` Prev/Next become shadcn `<Button>` with lucide chevron icons.
+- Auth pages (login + setup/forgot/reset-password) wrapped in shadcn `<Card>` + `<Input>` + `<Label>` + `<Button>`. **Effect bodies untouched** — the dual-flow handlers (`?code=` PKCE + `#access_token` implicit) and Strict Mode short-circuits from Plan 3 commits `3abd327` + `b2a7a9a` preserved byte-for-byte. JSX-only edits.
+- Old `components/sign-out-button.tsx` deleted (sidebar dropdown takes over).
+
+**`/login` error banner (closes Plan 3 silent-param gap):**
+- `<LoginErrorBanner>` subcomponent reads `useSearchParams()` and maps three keys to copy: `not_provisioned`, `inactive`, `insufficient_role`. **Wrapped in `<Suspense fallback={null}>`** — Next 16 fails the build with "useSearchParams should be wrapped in a Suspense boundary" otherwise.
+- `/leads/page.tsx` reads `?error=insufficient_role` from server-side `searchParams` props (no useSearchParams, no Suspense — Server Component) and renders an inline banner above the FilterBar.
+
+**`/users` page + Invite User flow:**
+- `/users` Server Component fetches `platform_users` with nested `agents (full_name, license_states)` join. Renders shadcn `<Table>` with email + role badge + Active/Inactive status indicator + agent details (— for non-agents) + relative-time joined.
+- "Invite user" button opens `<InviteUserDialog>` (client component, RHF + Zod resolver + shadcn `<Form>`). Conditional fields via `useWatch` on role: full_name + license_states required only for `role=agent`. License states render as a 6-column grid of shadcn `<Checkbox>` for the 50 US states.
+- `inviteUser` server action: `assertAdmin` first (defense-in-depth), then `auth.admin.inviteUserByEmail` → `platform_users` insert → `agents` insert (only when role=agent). **Explicit try/catch reversal** in opposite order on failure (agent → platform_user → auth user); never throws from cleanup; logs every step with `[invite-cleanup]` prefix.
+- Ordering rationale: invite-first because `inviteUserByEmail` is the highest-failure-rate step (email delivery, rate limits) — failing first means no DB writes need reversal. Race window for "user clicks link before platform_users row commits" is bounded by email-delivery latency (≥seconds) which is orders of magnitude longer than the remaining DB writes (single-statement inserts, milliseconds).
+- `agents.platform_user_id` FK has NO `ON DELETE CASCADE` (Plan 3 migration), so the cleanup branch deletes agents explicitly before platform_users. Documented in OOB notes for follow-up.
+- Toast on success via shadcn Sonner; inline form error on failure.
+
+**Server-side role gating — TWO helpers, separated by call-site:**
+- `requireAdmin()` (for Server Component pages): redirects to `/leads?error=insufficient_role` on failure.
+- `assertAdmin()` (for Server Actions): throws `Error("Forbidden")` on failure. The action's existing try/catch turns it into `{ ok: false, error: "Forbidden" }` so the dialog renders an inline error.
+- Why split: `redirect()` from inside a Server Action throws `NEXT_REDIRECT` which becomes a 303 navigation; the action's declared return type never resolves and the calling RHF submit handler hangs. Splitting preserves the clean inline-error UX while keeping page-level redirects working.
+
+**Email lowercasing — schema-only single source of truth:**
+- `inviteSchema` uses `z.string().email().toLowerCase()` transform. Action consumes the parsed value and inserts as-is — no second normalization layer. Test asserts uppercase / mixed-case email is normalized (load-bearing — fires loudly if anyone removes the transform).
+
+**New deps** (`apps/northgate-leads/package.json`):
+- `@hookform/resolvers`, `react-hook-form` — invite form
+- `class-variance-authority`, `clsx`, `tailwind-merge`, `tw-animate-css` — shadcn primitives + cva variants
+- `lucide-react` — icons
+- `next-themes` — bundled by shadcn (theme switcher not used in v0.2)
+- `radix-ui` — shadcn primitive backbone (single combined package, not individual @radix-ui/*)
+- `sonner` — toast
+- `zod` — invite schema
+
+**Tests:** new `apps/northgate-leads/src/app/users/invite-schema.test.ts` (11 assertions covering conditional validation, email normalization, role enum, US state validation, agent vs admin/superadmin requirements). Vitest suite total: 10 files / 159 tests.
+
+**Verification:**
+- `pnpm test` clean (159 tests).
+- `pnpm --filter northgate-leads lint` clean (two upstream shadcn lint patterns suppressed inline: `Math.random` in skeleton width memo, `setState` in matchMedia effect — both intentional).
+- `pnpm --filter northgate-leads build` clean. Routes: `/`, `/api/health`, `/auth/{callback,forgot-password,reset-password,setup-password,signout}`, `/leads`, `/login`, `/users`, `/_not-found`. All `(auth)/` group paths resolve to their stripped URLs as expected.
+- NP + Heritage lint unchanged (only the pre-existing 1 RHF warning each).
+- `supabase db diff --linked` clean (no migrations).
+
+**Decisions locked** (full table in plan file):
+- Two helpers: `requireAdmin` (page redirect) + `assertAdmin` (action throw)
+- Schema-only lowercasing via Zod transform
+- `<Suspense fallback={null}>` around `useSearchParams()` on `/login`; server-side `searchParams` props on `/leads`
+- JS-side cleanup branch (no SECURITY DEFINER RPC for v0.2)
+- Active/inactive toggle deferred to v0.3
+- Cleanup log prefix `[invite-cleanup]` (hyphen — searchable)
+
+**Open follow-ups:**
+- Lead detail page (`/leads/[id]`) → v0.3 platform.
+- Active/inactive toggle in `/users` → small follow-up (one server action + Switch).
+- Account / profile page → when a user wants to update license_states.
+- Migrate `agents.platform_user_id` to `ON DELETE CASCADE` if any other delete path emerges.
+- Migrate `inviteUser` cleanup branch to a SECURITY DEFINER RPC if production hits the rollback branch >0 times.
+- Auth-model decision-log entry (Plan 3 magic-link → invite-then-password) — fold into the next docs pass alongside other Plan 3/4 doc updates.
+- Verify `auth.admin.deleteUser` against current Supabase JS docs at the next dependency bump (currently relied on per the same Admin API surface as `test-platform-rls.ts`).
+
+**Branch:** `shadcn-refactor` off `main` (Plan 3's `add-agent-platform` merged via PR #7 first per Plan 4 Decision #21).
+
+---
+
 ## 2026-05-04 — Plan 3: Agent platform v0.1 + role-aware RLS
 
 Plan 3 per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. Phase 2 begins. Scaffolds `apps/northgate-leads/` (third Next.js app, magic-link auth, cross-brand leads table with filters + pagination), introduces a `platform_users` table to hold all auth-bearing principals (agent / admin / superadmin), and replaces the original tight `leads_select_agent` RLS with role-aware policies. NP + Heritage runtime unchanged. **First time the `authenticated` role gets any grants on the schema** — verified via mandatory grants-vs-RLS test per AGENTS.md § 6.

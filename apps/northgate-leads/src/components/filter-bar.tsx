@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { toggleParam, clearAll, type SearchParams } from "@/lib/url-params";
+import { Button } from "@/components/ui/button";
+import { FilterMenu } from "@/components/filter-menu";
+import { clearAll, getMulti, getSingle, type SearchParams } from "@/lib/url-params";
 
 type AgentOption = { id: string; full_name: string };
 
@@ -25,46 +27,10 @@ const SINCE_OPTIONS = [
   { value: "90d", label: "Last 90 days" },
 ];
 
-function Chip({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
-        active
-          ? "border-accent bg-accent text-white"
-          : "border-border bg-background text-foreground-soft hover:bg-hover"
-      }`}
-    >
-      {children}
-    </Link>
-  );
-}
-
-function Group({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-        {label}
-      </span>
-      {children}
-    </div>
-  );
-}
-
+// Server Component. Composes per-category FilterMenu dropdowns +
+// "Reset all" link. Each FilterMenu handles its own URL navigation
+// internally (client component); FilterBar reads the current state
+// from searchParams to render selected counts on the buttons.
 export function FilterBar({
   searchParams,
   role,
@@ -74,92 +40,79 @@ export function FilterBar({
   role: "agent" | "admin" | "superadmin";
   agents?: AgentOption[];
 }) {
-  const current = (key: string) => {
-    const v = searchParams[key];
-    return Array.isArray(v) ? v[0] : v;
-  };
-
-  const hasAnyFilter = ["brand", "product", "temp", "since", "agent"].some(
-    (k) => current(k),
-  );
-
   const isAdmin = role === "admin" || role === "superadmin";
 
+  const brandsSelected = getMulti(searchParams, "brand");
+  const productsSelected = getMulti(searchParams, "product");
+  const tempsSelected = getMulti(searchParams, "temp");
+  const sinceSelected = getSingle(searchParams, "since");
+  const agentsSelected = getMulti(searchParams, "agent");
+
+  const hasAnyFilter =
+    brandsSelected.length > 0 ||
+    productsSelected.length > 0 ||
+    tempsSelected.length > 0 ||
+    Boolean(sinceSelected) ||
+    agentsSelected.length > 0;
+
+  const agentOptions: { value: string; label: string }[] = isAdmin && agents
+    ? [
+        { value: "unassigned", label: "— Unassigned —" },
+        ...agents.map((a) => ({ value: a.id, label: a.full_name })),
+      ]
+    : [];
+
   return (
-    <div className="border-b border-border bg-hover px-6 py-4">
-      <div className="mx-auto max-w-7xl flex flex-col gap-3">
-        <Group label="Brand">
-          {BRAND_OPTIONS.map((o) => (
-            <Chip
-              key={o.value}
-              href={toggleParam(searchParams, "brand", o.value)}
-              active={current("brand") === o.value}
-            >
-              {o.label}
-            </Chip>
-          ))}
-        </Group>
-        <Group label="Product">
-          {PRODUCT_OPTIONS.map((o) => (
-            <Chip
-              key={o.value}
-              href={toggleParam(searchParams, "product", o.value)}
-              active={current("product") === o.value}
-            >
-              {o.label}
-            </Chip>
-          ))}
-        </Group>
-        <Group label="Temperature">
-          {TEMP_OPTIONS.map((o) => (
-            <Chip
-              key={o.value}
-              href={toggleParam(searchParams, "temp", o.value)}
-              active={current("temp") === o.value}
-            >
-              {o.label}
-            </Chip>
-          ))}
-        </Group>
-        <Group label="Created">
-          {SINCE_OPTIONS.map((o) => (
-            <Chip
-              key={o.value}
-              href={toggleParam(searchParams, "since", o.value)}
-              active={current("since") === o.value}
-            >
-              {o.label}
-            </Chip>
-          ))}
-        </Group>
-        {isAdmin && agents && (
-          <Group label="Agent">
-            <Chip
-              href={toggleParam(searchParams, "agent", "unassigned")}
-              active={current("agent") === "unassigned"}
-            >
-              Unassigned
-            </Chip>
-            {agents.map((a) => (
-              <Chip
-                key={a.id}
-                href={toggleParam(searchParams, "agent", a.id)}
-                active={current("agent") === a.id}
-              >
-                {a.full_name}
-              </Chip>
-            ))}
-          </Group>
+    <div className="border-b bg-card px-6 py-3">
+      <div className="mx-auto max-w-7xl flex flex-wrap items-center gap-2">
+        <FilterMenu
+          label="Brand"
+          paramKey="brand"
+          options={BRAND_OPTIONS}
+          selected={brandsSelected}
+          mode="multi"
+          searchParams={searchParams}
+        />
+        <FilterMenu
+          label="Product"
+          paramKey="product"
+          options={PRODUCT_OPTIONS}
+          selected={productsSelected}
+          mode="multi"
+          searchParams={searchParams}
+        />
+        <FilterMenu
+          label="Temperature"
+          paramKey="temp"
+          options={TEMP_OPTIONS}
+          selected={tempsSelected}
+          mode="multi"
+          searchParams={searchParams}
+        />
+        <FilterMenu
+          label="Created"
+          paramKey="since"
+          options={SINCE_OPTIONS}
+          selected={sinceSelected ? [sinceSelected] : []}
+          mode="single"
+          searchParams={searchParams}
+        />
+        {isAdmin && agentOptions.length > 0 && (
+          <FilterMenu
+            label="Agent"
+            paramKey="agent"
+            options={agentOptions}
+            selected={agentsSelected}
+            mode="multi"
+            searchParams={searchParams}
+          />
         )}
         {hasAnyFilter && (
-          <div>
-            <Link
-              href={clearAll(searchParams) || "/leads"}
-              className="text-xs text-accent hover:text-accent-hover"
-            >
-              Clear all filters
+          <Button asChild variant="ghost" size="sm" className="h-8 ml-auto">
+            <Link href={clearAll(searchParams) || "/leads"}>
+              Reset all
             </Link>
-          </div>
+          </Button>
         )}
       </div>
     </div>

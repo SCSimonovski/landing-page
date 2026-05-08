@@ -93,7 +93,19 @@ The repo is a pnpm workspace. Workspace package `@platform/shared` holds the sha
 apps/
   northgate-protection/    ← mortgage protection landing page (Meridian direction)
   northgate-heritage/      ← final expense landing page (Hearth direction)
-  northgate-leads/         ← agent platform (Phase 2 v0.1: Supabase Auth + cross-brand leads table)
+  northgate-leads/         ← agent platform (Phase 2 v0.2: shadcn UI + sidebar shell + /users + Invite User)
+    src/
+      app/
+        (auth)/              ← chromeless route group: /login, /auth/{setup,forgot,reset}-password
+        leads/               ← read-only cross-brand leads table (admin-only Assigned column)
+        users/               ← admin/superadmin User Management + Invite User dialog
+      components/
+        ui/                  ← shadcn primitives (copy-paste; lives in repo)
+        app-sidebar.tsx      ← role-aware sidebar (Users link admin/superadmin only)
+        invite-user-dialog.tsx ← RHF + Zod, conditional fields by role
+      lib/
+        auth/                ← getPlatformUser, requireAdmin (page redirect), assertAdmin (action throw)
+        supabase/            ← server / browser / middleware / service-role clients
 packages/
   shared/                  ← @platform/shared (workspace internal)
     db/                    ← Supabase clients + leads/suppressions helpers (server-only)
@@ -241,9 +253,9 @@ See `docs/CHANGELOG.md`.
 
 ### Next immediate task
 
-**Meta Pixel client-side install.** Plan 3 (agent platform v0.1: Supabase Auth + cross-brand leads table + role-aware RLS) shipped on 2026-05-04 — see CHANGELOG. Plan 3 was a pivot from the previously queued Pixel task; Pixel install resumes its position now. Path is unchanged: install the Pixel base code via the Next.js Script component on each brand's `<RootLayout>` (per-app, gated on `process.env.NEXT_PUBLIC_META_PIXEL_ID` being set), fire the standard `PageView` on every page load, fire `Lead` on form submit success in each `<LeadForm>`. Privacy-policy update needed too — both brands' `/privacy` page mention Meta sharing but specifics need attorney review (already on the launch checklist below). Platform doesn't get a Pixel (no consumer traffic).
+**Meta Pixel client-side install.** Plan 4 (agent platform v0.2: shadcn UI overhaul + sidebar shell + `/users` + Invite User dialog + `/login` error banner) shipped on 2026-05-08 — see CHANGELOG. Plan 4 was a side-quest off the queue; Pixel install resumes its position now. Path is unchanged: install the Pixel base code via the Next.js Script component on each brand's `<RootLayout>` (per-app, gated on `process.env.NEXT_PUBLIC_META_PIXEL_ID` being set), fire the standard `PageView` on every page load, fire `Lead` on form submit success in each `<LeadForm>`. Privacy-policy update needed too — both brands' `/privacy` page mention Meta sharing but specifics need attorney review (already on the launch checklist below). Platform doesn't get a Pixel (no consumer traffic).
 
-Subsequent tasks (rough order, not committed): server-side Meta CAPI dispatch (`/api/leads` `Promise.all` third entry — fires alongside SMS + email); daily DNC scrub cron (populates `dnc_registry` from the FTC list, brand-agnostic); platform v0.2 (status updates: lead detail page + status dropdown + UPDATE grant + role-aware UPDATE policy); replace placeholder copy + draft consent text + draft `/privacy` + `/terms` content with attorney-reviewed final versions (joint pass across both brands); register custom consumer domains for both brands (gates on LLC + brand); `mpl-prod` Supabase project + baseline migration replay (deferred until launch is imminent — free-tier projects pause after 7 days of inactivity).
+Subsequent tasks (rough order, not committed): server-side Meta CAPI dispatch (`/api/leads` `Promise.all` third entry — fires alongside SMS + email); daily DNC scrub cron (populates `dnc_registry` from the FTC list, brand-agnostic); platform v0.3 (lead detail page `/leads/[id]` + status dropdown + UPDATE grant + role-aware UPDATE policy); platform active/inactive toggle in `/users`; replace placeholder copy + draft consent text + draft `/privacy` + `/terms` content with attorney-reviewed final versions (joint pass across both brands); register custom consumer domains for both brands (gates on LLC + brand); `mpl-prod` Supabase project + baseline migration replay (deferred until launch is imminent — free-tier projects pause after 7 days of inactivity).
 
 **Vercel deploy posture (current):** Public URL is `https://northgateprotection.vercel.app` (renamed from the auto-generated slug early in the deploy task). This is a **public-URL dev environment, NOT launch.** Vercel's production env points at `mpl-dev` (the only Supabase project we have). Real launch requires `mpl-prod` + custom domain + LLC + A2P 10DLC + attorney-reviewed text. CT-log scanners WILL find the `*.vercel.app` URL; expect junk lead accumulation in `mpl-dev` from automated probes (mitigations: rate limits already in place, mpl-dev gets dropped before launch). Twilio webhook now points at the Vercel URL; outbound SMS still A2P-blocked at the carrier.
 

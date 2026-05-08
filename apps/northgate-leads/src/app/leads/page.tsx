@@ -8,6 +8,13 @@ import { Pagination } from "@/components/pagination";
 
 export const dynamic = "force-dynamic";
 
+// Server Component — reads searchParams from page props (no useSearchParams,
+// no Suspense boundary needed). Renders a small banner for the one error
+// key whose redirect target is /leads (insufficient_role from requireAdmin).
+const LEADS_ERROR_MESSAGES: Record<string, string> = {
+  insufficient_role: "You don't have access to that page.",
+};
+
 export default async function LeadsPage({
   searchParams,
 }: {
@@ -50,8 +57,26 @@ export default async function LeadsPage({
     throw new Error("Failed to load leads. Please reload the page.");
   }
 
+  const errorKey = (() => {
+    const v = params.error;
+    return Array.isArray(v) ? v[0] : v;
+  })();
+  const errorMsg = errorKey ? LEADS_ERROR_MESSAGES[errorKey] : null;
+
   return (
     <>
+      {errorMsg && (
+        <div className="border-b bg-destructive/5 px-6 py-3">
+          <div className="mx-auto max-w-7xl">
+            <p
+              role="alert"
+              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {errorMsg}
+            </p>
+          </div>
+        </div>
+      )}
       <FilterBar
         searchParams={params}
         role={platformUser.role}
