@@ -3,10 +3,17 @@ import { updateSession } from "@/lib/supabase/middleware";
 
 // Public routes — no auth required. Everything else redirects to /login
 // when no session.
+// /auth/setup-password and /auth/reset-password handle their own auth via
+// the URL hash fragment from invite/recovery emails — middleware can't
+// see the fragment, and these pages need to render before they have a
+// session. /auth/forgot-password is the public "send reset link" form.
 const PUBLIC_PATHS = [
   "/login",
   "/auth/callback",
   "/auth/signout",
+  "/auth/setup-password",
+  "/auth/forgot-password",
+  "/auth/reset-password",
   "/api/health",
 ];
 
