@@ -11,24 +11,53 @@ import {
   sinceToCutoff,
   DEFAULT_PER_PAGE,
   MAX_PER_PAGE,
+  type LeadFilters,
 } from "./leads-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@platform/shared/types/database";
 
+const baseFilters: LeadFilters = {
+  brands: [],
+  products: [],
+  temps: [],
+  agents: [],
+  dir: "desc",
+  page: 1,
+  perPage: 50,
+};
+
 describe("parseFilters", () => {
-  it("returns defaults when no params", () => {
+  it("returns defaults when no params (multi-value dimensions = empty arrays)", () => {
     expect(parseFilters({})).toEqual({
-      brand: undefined,
-      product: undefined,
-      temp: undefined,
+      brands: [],
+      products: [],
+      temps: [],
+      agents: [],
       since: undefined,
-      agent: undefined,
+      sort: undefined,
+      dir: "desc",
       page: 1,
       perPage: DEFAULT_PER_PAGE,
     });
   });
 
-  it("parses all filter values", () => {
+  it("parses valid sort + dir", () => {
+    expect(parseFilters({ sort: "last_name", dir: "asc" })).toMatchObject({
+      sort: "last_name",
+      dir: "asc",
+    });
+  });
+
+  it("rejects sort columns not on the whitelist", () => {
+    expect(parseFilters({ sort: "phone_e164" }).sort).toBeUndefined();
+  });
+
+  it("dir defaults to desc for any non-asc value", () => {
+    expect(parseFilters({ sort: "age", dir: "DESC" }).dir).toBe("desc");
+    expect(parseFilters({ sort: "age", dir: "garbage" }).dir).toBe("desc");
+  });
+
+  it("parses single-value form of multi-value params", () => {
     expect(
       parseFilters({
         brand: "northgate-heritage",
@@ -40,14 +69,38 @@ describe("parseFilters", () => {
         per_page: "100",
       }),
     ).toEqual({
-      brand: "northgate-heritage",
-      product: "final_expense",
-      temp: "hot",
+      brands: ["northgate-heritage"],
+      products: ["final_expense"],
+      temps: ["hot"],
+      agents: ["abc-123"],
       since: "30d",
-      agent: "abc-123",
+      sort: undefined,
+      dir: "desc",
       page: 3,
       perPage: 100,
     });
+  });
+
+  it("parses repeated-key form (?brand=x&brand=y) as an array", () => {
+    expect(
+      parseFilters({
+        brand: ["northgate-protection", "northgate-heritage"],
+        temp: ["hot", "warm"],
+        agent: ["a", "b"],
+      }),
+    ).toMatchObject({
+      brands: ["northgate-protection", "northgate-heritage"],
+      temps: ["hot", "warm"],
+      agents: ["a", "b"],
+    });
+  });
+
+  it("filters out unknown temperature values", () => {
+    expect(parseFilters({ temp: ["hot", "lukewarm"] }).temps).toEqual(["hot"]);
+  });
+
+  it("rejects unknown since values to undefined", () => {
+    expect(parseFilters({ since: "1y" }).since).toBeUndefined();
   });
 
   it("clamps page to >= 1", () => {
@@ -65,8 +118,8 @@ describe("parseFilters", () => {
     expect(parseFilters({ per_page: "-5" }).perPage).toBe(1);
   });
 
-  it("takes the first value when a param is an array", () => {
-    expect(parseFilters({ brand: ["a", "b"] }).brand).toBe("a");
+  it("takes the first value when page is an array", () => {
+    expect(parseFilters({ page: ["3", "5"] }).page).toBe(3);
   });
 });
 
@@ -112,68 +165,100 @@ describe("buildLeadsQuery", () => {
 
   it("agent role: select * (no agents join)", () => {
     const { client, calls } = makeMockClient();
-    buildLeadsQuery(
-      { page: 1, perPage: 50 },
-      "agent",
-      client,
-    );
+    buildLeadsQuery(baseFilters, "agent", client);
     const select = calls.find((c) => c.method === "select");
     expect(select?.args[0]).toBe("*");
   });
 
   it("admin role: select includes agents join", () => {
     const { client, calls } = makeMockClient();
-    buildLeadsQuery(
-      { page: 1, perPage: 50 },
-      "admin",
-      client,
-    );
+    buildLeadsQuery(baseFilters, "admin", client);
     const select = calls.find((c) => c.method === "select");
     expect(select?.args[0]).toContain("agent:agents");
   });
 
-  it("orders by created_at desc", () => {
+  it("default sort: created_at desc", () => {
     const { client, calls } = makeMockClient();
-    buildLeadsQuery({ page: 1, perPage: 50 }, "agent", client);
+    buildLeadsQuery(baseFilters, "agent", client);
     const order = calls.find((c) => c.method === "order");
     expect(order?.args).toEqual(["created_at", { ascending: false }]);
   });
 
-  it("applies brand filter via .eq", () => {
+  it("respects user-controllable sort + asc dir", () => {
     const { client, calls } = makeMockClient();
     buildLeadsQuery(
-      { page: 1, perPage: 50, brand: "northgate-heritage" },
+      { ...baseFilters, sort: "last_name", dir: "asc" },
       "agent",
       client,
     );
-    const eqCalls = calls.filter((c) => c.method === "eq");
-    expect(eqCalls).toContainEqual({
-      method: "eq",
-      args: ["brand", "northgate-heritage"],
+    const order = calls.find((c) => c.method === "order");
+    expect(order?.args).toEqual(["last_name", { ascending: true }]);
+  });
+
+  it("respects user-controllable sort + desc dir", () => {
+    const { client, calls } = makeMockClient();
+    buildLeadsQuery(
+      { ...baseFilters, sort: "intent_score", dir: "desc" },
+      "agent",
+      client,
+    );
+    const order = calls.find((c) => c.method === "order");
+    expect(order?.args).toEqual(["intent_score", { ascending: false }]);
+  });
+
+  it("single brand filter via .in", () => {
+    const { client, calls } = makeMockClient();
+    buildLeadsQuery(
+      { ...baseFilters, brands: ["northgate-heritage"] },
+      "agent",
+      client,
+    );
+    const inCalls = calls.filter((c) => c.method === "in");
+    expect(inCalls).toContainEqual({
+      method: "in",
+      args: ["brand", ["northgate-heritage"]],
+    });
+  });
+
+  it("multiple brand filters via .in([a, b])", () => {
+    const { client, calls } = makeMockClient();
+    buildLeadsQuery(
+      { ...baseFilters, brands: ["northgate-protection", "northgate-heritage"] },
+      "agent",
+      client,
+    );
+    const inCalls = calls.filter((c) => c.method === "in");
+    expect(inCalls).toContainEqual({
+      method: "in",
+      args: ["brand", ["northgate-protection", "northgate-heritage"]],
     });
   });
 
   it("applies product + temperature filters", () => {
     const { client, calls } = makeMockClient();
     buildLeadsQuery(
-      { page: 1, perPage: 50, product: "final_expense", temp: "hot" },
+      {
+        ...baseFilters,
+        products: ["final_expense"],
+        temps: ["hot", "warm"],
+      },
       "agent",
       client,
     );
-    const eqCalls = calls.filter((c) => c.method === "eq");
-    expect(eqCalls).toContainEqual({
-      method: "eq",
-      args: ["product", "final_expense"],
+    const inCalls = calls.filter((c) => c.method === "in");
+    expect(inCalls).toContainEqual({
+      method: "in",
+      args: ["product", ["final_expense"]],
     });
-    expect(eqCalls).toContainEqual({
-      method: "eq",
-      args: ["temperature", "hot"],
+    expect(inCalls).toContainEqual({
+      method: "in",
+      args: ["temperature", ["hot", "warm"]],
     });
   });
 
   it("applies date range via .gte", () => {
     const { client, calls } = makeMockClient();
-    buildLeadsQuery({ page: 1, perPage: 50, since: "7d" }, "agent", client);
+    buildLeadsQuery({ ...baseFilters, since: "7d" }, "agent", client);
     const gte = calls.find((c) => c.method === "gte");
     expect(gte?.args[0]).toBe("created_at");
     expect(typeof gte?.args[1]).toBe("string");
@@ -182,34 +267,37 @@ describe("buildLeadsQuery", () => {
   it("agent filter ignored for agent role (RLS handles isolation)", () => {
     const { client, calls } = makeMockClient();
     buildLeadsQuery(
-      { page: 1, perPage: 50, agent: "some-other-agent" },
+      { ...baseFilters, agents: ["some-other-agent"] },
       "agent",
       client,
     );
-    // No .eq("agent_id", ...) call should appear.
-    const agentEq = calls.find(
-      (c) => c.method === "eq" && c.args[0] === "agent_id",
+    // No .in("agent_id", ...) or .is("agent_id", ...) call should appear.
+    const agentCalls = calls.filter(
+      (c) =>
+        (c.method === "in" || c.method === "is" || c.method === "or") &&
+        (c.args[0] === "agent_id" ||
+          (typeof c.args[0] === "string" && c.args[0].includes("agent_id"))),
     );
-    expect(agentEq).toBeUndefined();
+    expect(agentCalls).toEqual([]);
   });
 
-  it("agent filter applied for admin role", () => {
+  it("admin: single agent filter via .in", () => {
     const { client, calls } = makeMockClient();
     buildLeadsQuery(
-      { page: 1, perPage: 50, agent: "admin-picked-agent" },
+      { ...baseFilters, agents: ["admin-picked-agent"] },
       "admin",
       client,
     );
-    const agentEq = calls.find(
-      (c) => c.method === "eq" && c.args[0] === "agent_id",
+    const inCall = calls.find(
+      (c) => c.method === "in" && c.args[0] === "agent_id",
     );
-    expect(agentEq?.args[1]).toBe("admin-picked-agent");
+    expect(inCall?.args[1]).toEqual(["admin-picked-agent"]);
   });
 
-  it("agent=unassigned uses .is null for admin role", () => {
+  it("admin: agents=[unassigned] uses .is null", () => {
     const { client, calls } = makeMockClient();
     buildLeadsQuery(
-      { page: 1, perPage: 50, agent: "unassigned" },
+      { ...baseFilters, agents: ["unassigned"] },
       "admin",
       client,
     );
@@ -217,9 +305,22 @@ describe("buildLeadsQuery", () => {
     expect(isCall?.args).toEqual(["agent_id", null]);
   });
 
+  it("admin: agents=[unassigned, x, y] uses .or for null OR in (...)", () => {
+    const { client, calls } = makeMockClient();
+    buildLeadsQuery(
+      { ...baseFilters, agents: ["unassigned", "agent-1", "agent-2"] },
+      "admin",
+      client,
+    );
+    const orCall = calls.find((c) => c.method === "or");
+    expect(orCall?.args[0]).toBe(
+      "agent_id.is.null,agent_id.in.(agent-1,agent-2)",
+    );
+  });
+
   it("range computed from page + perPage", () => {
     const { client, calls } = makeMockClient();
-    buildLeadsQuery({ page: 3, perPage: 50 }, "agent", client);
+    buildLeadsQuery({ ...baseFilters, page: 3, perPage: 50 }, "agent", client);
     const range = calls.find((c) => c.method === "range");
     // page 3 of 50 → start 100, end 149
     expect(range?.args).toEqual([100, 149]);

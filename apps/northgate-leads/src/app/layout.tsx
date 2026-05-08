@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
+import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { Toaster } from "@/components/ui/sonner";
+import { AppSidebar } from "@/components/app-sidebar";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { SignOutButton } from "@/components/sign-out-button";
+import { getPlatformUser } from "@/lib/auth/get-platform-user";
 import "./globals.css";
 
 const geist = Geist({
@@ -23,43 +25,45 @@ export const metadata: Metadata = {
   description: "Internal lead management for licensed agents.",
 };
 
+// Root layout serves two shapes:
+//   - Authed routes (/leads, /users): rendered with sidebar shell.
+//   - (auth) routes (/login, /auth/*): rendered chromeless via the
+//     (auth) group's own layout — those override this one's <main>
+//     children content but still inherit the <html>/<body> wrapper.
+// We branch by checking whether there's a resolved platform user.
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  // Show sign-out only when there's a session. Header chrome is shared
-  // across /login (no session) and /leads (session) — keep it simple.
   const supabase = await createSupabaseServerClient();
   const {
-    data: { user },
+    data: { user: authUser },
   } = await supabase.auth.getUser();
+
+  // Plan 4 Approach B: server-side cookie read for first paint. shadcn
+  // Sidebar persists open/closed via the sidebar_state cookie; without
+  // reading it on the server, every navigation flashes the default
+  // (open) before client hydration corrects it.
+  const cookieStore = await cookies();
+  const sidebarOpen = cookieStore.get("sidebar_state")?.value !== "false";
+
+  const platformUser = authUser ? await getPlatformUser() : null;
+  const showShell = Boolean(authUser && platformUser && platformUser.active);
 
   return (
     <html
       lang="en"
       className={`${geist.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
-        <header className="border-b border-border bg-background">
-          <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
-            <Link href="/leads" aria-label="Northgate Leads home" className="block">
-              <Image
-                src="/northgate-leads-logo.svg"
-                alt="Northgate Leads"
-                width={280}
-                height={80}
-                priority
-                className="h-10 w-auto"
-              />
-            </Link>
-            {user && (
-              <div className="flex items-center gap-4 text-sm">
-                <span className="text-muted">{user.email}</span>
-                <SignOutButton />
-              </div>
-            )}
-          </div>
-        </header>
-        <main className="flex-1">{children}</main>
+      <body className="min-h-svh bg-background text-foreground">
+        {showShell ? (
+          <SidebarProvider defaultOpen={sidebarOpen}>
+            <AppSidebar user={platformUser!} email={authUser!.email ?? ""} />
+            <SidebarInset>{children}</SidebarInset>
+          </SidebarProvider>
+        ) : (
+          children
+        )}
+        <Toaster richColors position="top-right" />
       </body>
     </html>
   );

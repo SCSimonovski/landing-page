@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@platform/shared/types/database";
+import { getMulti, getSingle, type SearchParams } from "./url-params";
 
 // Loose Supabase client typing. `@supabase/ssr`'s createServerClient and
 // `@supabase/supabase-js`'s SupabaseClient have different generic arities
@@ -8,12 +9,25 @@ import type { Database } from "@platform/shared/types/database";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySupabaseClient = SupabaseClient<Database, "public", any>;
 
+export type SortColumn =
+  | "created_at"
+  | "last_name"
+  | "state"
+  | "age"
+  | "intent_score";
+export type SortDir = "asc" | "desc";
+
 export type LeadFilters = {
-  brand?: string;
-  product?: string;
-  temp?: "hot" | "warm" | "cold";
+  // Multi-value: empty array means "no filter on this dimension".
+  brands: string[];
+  products: string[];
+  temps: Array<"hot" | "warm" | "cold">;
+  agents: string[]; // agent.id values, OR the literal "unassigned"
+  // Single-value:
   since?: "7d" | "30d" | "90d";
-  agent?: string; // agent.id, or "unassigned"
+  // User-controllable sort. undefined = default (created_at desc).
+  sort?: SortColumn;
+  dir: SortDir; // defaults to "desc"
   page: number; // 1-indexed
   perPage: number;
 };
@@ -23,23 +37,57 @@ export type LeadsQueryRole = "agent" | "admin" | "superadmin";
 export const DEFAULT_PER_PAGE = 50;
 export const MAX_PER_PAGE = 200;
 
+const TEMP_VALUES = new Set(["hot", "warm", "cold"]);
+const SINCE_VALUES = new Set(["7d", "30d", "90d"]);
+
+// Whitelist of columns the sort URL param will accept. Keeps malicious /
+// typo'd values from reaching Supabase's .order() and surfacing as confusing
+// "column does not exist" errors. Brand / product / temperature are filters,
+// not useful sort dimensions; phone / email alphabetical sort is weird;
+// details is JSONB; agent_id sort approximates "assigned" and is omitted
+// for v0.2 simplicity.
+const SORT_COLUMNS = new Set<SortColumn>([
+  "created_at",
+  "last_name",
+  "state",
+  "age",
+  "intent_score",
+]);
+
 // Parse search params from a Next 16 page.tsx into a typed filters object.
-// Caps per_page to prevent runaway queries; clamps page to >= 1.
-export function parseFilters(
-  params: Record<string, string | string[] | undefined>,
-): LeadFilters {
-  const get = (k: string): string | undefined => {
-    const v = params[k];
-    return Array.isArray(v) ? v[0] : v;
-  };
-  const pageRaw = parseInt(get("page") ?? "1", 10);
-  const perPageRaw = parseInt(get("per_page") ?? String(DEFAULT_PER_PAGE), 10);
+// Caps per_page to prevent runaway queries; clamps page to >= 1. Multi-value
+// dimensions tolerate either ?brand=x or ?brand=x&brand=y.
+export function parseFilters(params: SearchParams): LeadFilters {
+  const pageRaw = parseInt(getSingle(params, "page") ?? "1", 10);
+  const perPageRaw = parseInt(
+    getSingle(params, "per_page") ?? String(DEFAULT_PER_PAGE),
+    10,
+  );
+
+  const since = getSingle(params, "since");
+  const sinceTyped = since && SINCE_VALUES.has(since)
+    ? (since as LeadFilters["since"])
+    : undefined;
+
+  const temps = getMulti(params, "temp").filter((t) =>
+    TEMP_VALUES.has(t),
+  ) as LeadFilters["temps"];
+
+  const sortRaw = getSingle(params, "sort");
+  const sort = sortRaw && SORT_COLUMNS.has(sortRaw as SortColumn)
+    ? (sortRaw as SortColumn)
+    : undefined;
+  const dirRaw = getSingle(params, "dir");
+  const dir: SortDir = dirRaw === "asc" ? "asc" : "desc";
+
   return {
-    brand: get("brand") || undefined,
-    product: get("product") || undefined,
-    temp: (get("temp") as LeadFilters["temp"]) || undefined,
-    since: (get("since") as LeadFilters["since"]) || undefined,
-    agent: get("agent") || undefined,
+    brands: getMulti(params, "brand"),
+    products: getMulti(params, "product"),
+    temps,
+    agents: getMulti(params, "agent"),
+    since: sinceTyped,
+    sort,
+    dir,
     page: Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1,
     perPage: Math.min(
       Math.max(Number.isFinite(perPageRaw) ? perPageRaw : DEFAULT_PER_PAGE, 1),
@@ -74,26 +122,43 @@ export function buildLeadsQuery(
   // field naming on the row (singular makes the LeadTable cell read better).
   const select = role === "agent" ? "*" : "*, agent:agents(id, full_name)";
 
+  // Default sort: created_at desc. User-controllable sort overrides via
+  // ?sort=<column>&dir=<asc|desc>; the column is whitelisted in
+  // parseFilters so .order() never sees an arbitrary string.
+  const sortCol = filters.sort ?? "created_at";
+  const ascending = filters.dir === "asc";
+
   let q = supabase
     .from("leads")
     .select(select, { count: "exact" })
-    .order("created_at", { ascending: false });
+    .order(sortCol, { ascending });
 
-  if (filters.brand) q = q.eq("brand", filters.brand);
-  if (filters.product) q = q.eq("product", filters.product);
-  if (filters.temp) q = q.eq("temperature", filters.temp);
+  // Multi-value filters use .in(). Single value works too (Supabase handles
+  // a 1-element array fine). Empty array = no filter applied.
+  if (filters.brands.length > 0) q = q.in("brand", filters.brands);
+  if (filters.products.length > 0) q = q.in("product", filters.products);
+  if (filters.temps.length > 0) q = q.in("temperature", filters.temps);
 
   const cutoff = sinceToCutoff(filters.since);
   if (cutoff) q = q.gte("created_at", cutoff);
 
   // Agent filter is admin/superadmin-only at the UI level; if an agent
   // crafts the URL manually, RLS still scopes them to their own leads
-  // (server-side enforcement). The `unassigned` sentinel maps to NULL.
-  if (filters.agent && (role === "admin" || role === "superadmin")) {
-    if (filters.agent === "unassigned") {
+  // (server-side enforcement). The "unassigned" sentinel maps to NULL —
+  // mixing "unassigned" with concrete agent ids in the same filter is
+  // supported via .or() (`agent_id is null OR agent_id in (...)`).
+  if (
+    filters.agents.length > 0 &&
+    (role === "admin" || role === "superadmin")
+  ) {
+    const concrete = filters.agents.filter((a) => a !== "unassigned");
+    const includesUnassigned = filters.agents.includes("unassigned");
+    if (includesUnassigned && concrete.length > 0) {
+      q = q.or(`agent_id.is.null,agent_id.in.(${concrete.join(",")})`);
+    } else if (includesUnassigned) {
       q = q.is("agent_id", null);
     } else {
-      q = q.eq("agent_id", filters.agent);
+      q = q.in("agent_id", concrete);
     }
   }
 
