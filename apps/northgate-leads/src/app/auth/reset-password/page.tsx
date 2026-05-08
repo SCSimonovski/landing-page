@@ -24,6 +24,23 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     let cancelled = false;
     async function verify() {
+      const supabase = createSupabaseBrowserClient();
+
+      // PKCE flow (browser-client resetPasswordForEmail): ?code=... in query.
+      const code = new URLSearchParams(window.location.search).get("code");
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (cancelled) return;
+        if (error) {
+          setStatus({ kind: "error", message: error.message });
+          return;
+        }
+        window.history.replaceState(null, "", window.location.pathname);
+        setStatus({ kind: "ready" });
+        return;
+      }
+
+      // Implicit flow fallback: #access_token=...&type=recovery in hash.
       const hash = window.location.hash.slice(1);
       const params = new URLSearchParams(hash);
       const accessToken = params.get("access_token");
@@ -48,7 +65,6 @@ export default function ResetPasswordPage() {
         return;
       }
 
-      const supabase = createSupabaseBrowserClient();
       const { error } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken,

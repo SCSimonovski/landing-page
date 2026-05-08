@@ -27,6 +27,26 @@ export default function SetupPasswordPage() {
   useEffect(() => {
     let cancelled = false;
     async function verify() {
+      const supabase = createSupabaseBrowserClient();
+
+      // PKCE flow: ?code=... in query (used if Supabase ever switches
+      // dashboard invite to PKCE; today it uses implicit, but harmless
+      // to handle both for symmetry with reset-password).
+      const code = new URLSearchParams(window.location.search).get("code");
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (cancelled) return;
+        if (error) {
+          setStatus({ kind: "error", message: error.message });
+          return;
+        }
+        window.history.replaceState(null, "", window.location.pathname);
+        setStatus({ kind: "ready" });
+        return;
+      }
+
+      // Implicit flow (current dashboard invite behavior):
+      // #access_token=...&type=invite in hash.
       const hash = window.location.hash.slice(1);
       const params = new URLSearchParams(hash);
       const accessToken = params.get("access_token");
@@ -51,7 +71,6 @@ export default function SetupPasswordPage() {
         return;
       }
 
-      const supabase = createSupabaseBrowserClient();
       const { error } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken,
