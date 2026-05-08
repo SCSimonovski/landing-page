@@ -16,30 +16,35 @@ export type Database = {
     Tables: {
       agents: {
         Row: {
-          active: boolean
           created_at: string
-          email: string
           full_name: string
           id: string
           license_states: string[]
+          platform_user_id: string
         }
         Insert: {
-          active?: boolean
           created_at?: string
-          email: string
           full_name: string
           id?: string
           license_states?: string[]
+          platform_user_id: string
         }
         Update: {
-          active?: boolean
           created_at?: string
-          email?: string
           full_name?: string
           id?: string
           license_states?: string[]
+          platform_user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "agents_platform_user_id_fkey"
+            columns: ["platform_user_id"]
+            isOneToOne: true
+            referencedRelation: "platform_users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       consent_log: {
         Row: {
@@ -236,6 +241,30 @@ export type Database = {
           },
         ]
       }
+      platform_users: {
+        Row: {
+          active: boolean
+          created_at: string
+          email: string
+          id: string
+          role: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          email: string
+          id?: string
+          role: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          email?: string
+          id?: string
+          role?: string
+        }
+        Relationships: []
+      }
       suppressions: {
         Row: {
           email: string | null
@@ -268,6 +297,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      current_platform_user: {
+        Args: never
+        Returns: {
+          active: boolean
+          agent_id: string
+          id: string
+          role: string
+        }[]
+      }
       insert_lead_with_consent: { Args: { payload: Json }; Returns: string }
     }
     Enums: {
