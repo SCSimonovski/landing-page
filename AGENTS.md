@@ -93,7 +93,7 @@ The repo is a pnpm workspace. Workspace package `@platform/shared` holds the sha
 apps/
   northgate-protection/    ← mortgage protection landing page (Meridian direction)
   northgate-heritage/      ← final expense landing page (Hearth direction)
-  platform/                ← agent platform (Phase 2)
+  platform/                ← agent platform (Phase 2 v0.1: Supabase Auth + cross-brand leads table)
 packages/
   shared/                  ← @platform/shared (workspace internal)
     db/                    ← Supabase clients + leads/suppressions helpers (server-only)
@@ -151,7 +151,7 @@ After build: update § 9 here (next task), append an entry to `docs/CHANGELOG.md
 
 **One reviewer.** The developer presents plans to Claude.ai (the project chat) for review. No second AI reviewer in Phase 1; that comes when Phase 2 (the platform app) starts.
 
-**Tests.** Pure-function business logic (intent scoring, validation, template byte-identity, phone normalization, STOP keyword detection, SMS dispatcher routing) is covered by vitest. Run `pnpm test` for the unit suite (~7 files / 100+ assertions / <2s); `pnpm test:watch` for the dev loop. Test files are co-located with sources (`<source>.test.ts`). Integration tests (DB writes, dispatch side effects, Twilio webhook) stay as bespoke `tsx` scripts in `scripts/` — see `test-dispatch-suppression.ts` for the pattern. No CI / no coverage gates / no UI snapshots in Phase 1.
+**Tests.** Pure-function business logic (intent scoring, validation, template byte-identity, phone normalization, STOP keyword detection, SMS dispatcher routing, platform query/URL helpers) is covered by vitest. Run `pnpm test` for the unit suite (~9 files / 140+ assertions / <2s); `pnpm test:watch` for the dev loop. Test files are co-located with sources (`<source>.test.ts`). Integration tests (DB writes, dispatch side effects, Twilio webhook, RLS verification) stay as bespoke `tsx` scripts in `scripts/` — see `test-dispatch-suppression.ts` and `test-platform-rls.ts` for the pattern. The `test-platform-rls.ts` script signs JWTs locally with `SUPABASE_JWT_SECRET` to exercise authenticated-user RLS contexts (service-role-based scripts bypass RLS and can't test it). No CI / no coverage gates / no UI snapshots in Phase 1.
 
 ---
 
@@ -190,17 +190,21 @@ After build: update § 9 here (next task), append an entry to `docs/CHANGELOG.md
 - **Anon writes are blocked at the grants layer in Phase 1.** RLS policies are in place as a second layer but are **not exercised by current tests** because anon has no grants. When Phase 2 grants any privilege to `anon` or `authenticated`, that migration's verification must include an RLS-specific test (a request that satisfies grants but fails RLS — i.e., expect `"new row violates row-level security policy"`) to confirm the second layer is wired correctly.
 - **Per-product qualifying data lives in `leads.details` (JSONB), not as top-level columns.** `brand` and `product` are text discriminators with app-level Zod validation, no DB-level enum (flexibility to add brands without DDL). Top-level columns on `leads` stay reserved for brand-agnostic demographics (state, age, names, contact) + control fields (status, agent_id, on_dnc) + attribution (utm_*, fbclid). Per-product fields like `mortgage_balance`, `is_smoker`, `is_homeowner` (Northgate Protection) or coverage amount + health questions (Northgate Heritage) live inside `details`.
 - **Per-product Zod schemas in `packages/shared/validation/details/` are the canonical source of truth for the `details` JSONB shape** — used by both form-side validation (per-app) AND template-side parsers (shared dispatchers in `twilio/messages.ts` + `email/welcome.ts`). Type interfaces in `packages/shared/types/products.ts` are derived via `z.infer<>` from the Zod schemas (single source of truth — no hand-maintained type drift). The dispatcher pattern: `formatAgentSMS(lead)` switches on `lead.product` to the right `formatXxxSMS(lead)` template, which Zod-parses `lead.details` and throws with descriptive errors if shape is wrong. Adding a new product is: write the Zod schema in `validation/details/<product>.ts`, add the SMS + email templates in their `templates/<product>.ts` files, add the dispatcher cases.
+- **Role-aware RLS pattern (post-Plan-3).** Platform reads use role-aware policies keyed off `platform_users.role` (`agent` / `admin` / `superadmin`). `agents` is agents-only (admin/superadmin live in `platform_users` only — no paired `agents` row). All policies call the `current_platform_user()` SECURITY DEFINER function to look up role + agent_id without recursing into themselves (naive nested `exists` against same table → Postgres 42P17 infinite recursion). The function has `set search_path = public` — load-bearing protection against search-path injection on SECURITY DEFINER. `auth.jwt()` calls inside the function are wrapped in `(select ...)` for InitPlan execution. Adding a v0.X status-update path means a new role-aware UPDATE policy + UPDATE grant; don't reuse the old `_agent` policy names — they're gone.
+- **`platform_users.email` carries a CHECK constraint forcing lowercase.** Supabase Auth normalizes JWT emails to lowercase; manual `insert into platform_users` should match (CHECK rejects mixed case at the schema layer). Operator-side: invite emails should be entered lowercase in the Supabase Auth dashboard.
 
 ### Operational discipline
 
-- **Env-var changes are 5-place updates.** When adding or rotating any env var:
-  1. Root `.env.local` (for Supabase CLI, scripts/, gen:types)
+- **Env-var changes are 7-place updates** (post-Plan-3). When adding or rotating any env var:
+  1. Root `.env.local` (for Supabase CLI, scripts/, gen:types, `test-platform-rls.ts`)
   2. `apps/northgate-protection/.env.local` (for NP's `next dev --port 3000` / `next build`)
   3. `apps/northgate-heritage/.env.local` (for Heritage's `next dev --port 3001` / `next build`)
-  4. Vercel: Northgate Protection project's Environment Variables
-  5. Vercel: Northgate Heritage project's Environment Variables
+  4. `apps/platform/.env.local` (for the agent platform's `next dev --port 3002` / `next build`)
+  5. Vercel: Northgate Protection project's Environment Variables
+  6. Vercel: Northgate Heritage project's Environment Variables
+  7. Vercel: mpl-platform project's Environment Variables
 
-  Run `pnpm verify-envs` before pushing to confirm the local-side three are in sync (key sets only — values legitimately differ per environment). Vercel-side requires manual per-project dashboard verification. **After any rotation, redeploy each Vercel project** to pick up the new value (Vercel does NOT auto-redeploy on env-var changes). Currently 18 keys × 3 local locations.
+  Run `pnpm verify-envs` before pushing to confirm the local-side four are in sync (key sets only — values legitimately differ per environment). Vercel-side requires manual per-project dashboard verification. **After any rotation, redeploy each Vercel project** to pick up the new value (Vercel does NOT auto-redeploy on env-var changes). Currently 17 keys × 4 local locations (will become 18 once `SUPABASE_JWT_SECRET` is added across all four for `test-platform-rls.ts`).
 
 ---
 
@@ -208,9 +212,10 @@ After build: update § 9 here (next task), append an entry to `docs/CHANGELOG.md
 
 These are Phase 2 or later. Resist proposing them, and flag clearly if a request would pull us into them:
 
-- Custom admin dashboard (Supabase Studio is the admin UI)
-- Agent self-service login or status updates
-- Multi-agent routing logic — there is one agent
+- Custom admin dashboard *for non-agent operators* (Supabase Studio remains the data-engineer admin UI; the platform at `apps/platform/` is the agent + operator dashboard for lead visibility, post-Plan-3)
+- Agent self-service signup (invite-only via Supabase Auth + `platform_users` insert per Plan 3)
+- Agent status updates (planned for v0.2 of the platform; v0.1 ships read-only)
+- Multi-agent routing logic — Phase 1 commits to one *buying* agent (the platform may have multiple admin/operator `platform_users`, but lead routing stays single-agent until Phase 2 v1.0 per playbook 03 § 3.4)
 - Lead nurture sequences beyond the welcome email
 - Charts, analytics dashboards, attribution modeling
 - Automated refund processing
@@ -236,9 +241,9 @@ See `docs/CHANGELOG.md`.
 
 ### Next immediate task
 
-**Meta Pixel client-side install.** Plan 2b (Heritage scaffold + FE template population + new Vercel project) shipped on 2026-05-03 — see CHANGELOG. Heritage is live in local dev (`pnpm --filter northgate-heritage dev` on port 3001) and ready for its Vercel project once user completes the deploy checklist in CHANGELOG. With both brands now scaffolded, the Pixel install path is unblocked: install the Pixel base code via the Next.js Script component on each brand's `<RootLayout>` (per-app, gated on `process.env.NEXT_PUBLIC_META_PIXEL_ID` being set), fire the standard `PageView` on every page load, fire `Lead` on form submit success in each `<LeadForm>`. Privacy-policy update needed too — both brands' `/privacy` page mention Meta sharing but specifics need attorney review (already on the launch checklist below).
+**Meta Pixel client-side install.** Plan 3 (agent platform v0.1: Supabase Auth + cross-brand leads table + role-aware RLS) shipped on 2026-05-04 — see CHANGELOG. Plan 3 was a pivot from the previously queued Pixel task; Pixel install resumes its position now. Path is unchanged: install the Pixel base code via the Next.js Script component on each brand's `<RootLayout>` (per-app, gated on `process.env.NEXT_PUBLIC_META_PIXEL_ID` being set), fire the standard `PageView` on every page load, fire `Lead` on form submit success in each `<LeadForm>`. Privacy-policy update needed too — both brands' `/privacy` page mention Meta sharing but specifics need attorney review (already on the launch checklist below). Platform doesn't get a Pixel (no consumer traffic).
 
-Subsequent tasks (rough order, not committed): server-side Meta CAPI dispatch (`/api/leads` `Promise.all` third entry — fires alongside SMS + email); daily DNC scrub cron (populates `dnc_registry` from the FTC list, brand-agnostic); replace placeholder copy + draft consent text + draft `/privacy` + `/terms` content with attorney-reviewed final versions (joint pass across both brands); register custom consumer domains for both brands (gates on LLC + brand); `mpl-prod` Supabase project + baseline migration replay (deferred until launch is imminent — free-tier projects pause after 7 days of inactivity).
+Subsequent tasks (rough order, not committed): server-side Meta CAPI dispatch (`/api/leads` `Promise.all` third entry — fires alongside SMS + email); daily DNC scrub cron (populates `dnc_registry` from the FTC list, brand-agnostic); platform v0.2 (status updates: lead detail page + status dropdown + UPDATE grant + role-aware UPDATE policy); replace placeholder copy + draft consent text + draft `/privacy` + `/terms` content with attorney-reviewed final versions (joint pass across both brands); register custom consumer domains for both brands (gates on LLC + brand); `mpl-prod` Supabase project + baseline migration replay (deferred until launch is imminent — free-tier projects pause after 7 days of inactivity).
 
 **Vercel deploy posture (current):** Public URL is `https://northgateprotection.vercel.app` (renamed from the auto-generated slug early in the deploy task). This is a **public-URL dev environment, NOT launch.** Vercel's production env points at `mpl-dev` (the only Supabase project we have). Real launch requires `mpl-prod` + custom domain + LLC + A2P 10DLC + attorney-reviewed text. CT-log scanners WILL find the `*.vercel.app` URL; expect junk lead accumulation in `mpl-dev` from automated probes (mitigations: rate limits already in place, mpl-dev gets dropped before launch). Twilio webhook now points at the Vercel URL; outbound SMS still A2P-blocked at the carrier.
 
@@ -249,7 +254,12 @@ Subsequent tasks (rough order, not committed): server-side Meta CAPI dispatch (`
 - **Hero imagery: Meridian uses the brand-mark arch as graphic, NOT photography.** Eliminated the "real hero photo before SAC" gate from the prior brand pass. Trade-off per playbook 02 Part 2.5 (real photos beat stock by ~20%; no-photo "almost certainly underperforms even stock") is acknowledged and accepted: the brand-mark editorial approach reads as intentional design rather than missing image. **Watch-item, not blocker for NP:** if SAC/CAC numbers post-launch don't justify the editorial choice, fallback is to swap `<ArchMotif>` for a real architectural-detail photo. Decision-point comes after the first ad-test cohort; not a launch-readiness gate.
 - **Hero imagery for Heritage:** editorial composition (diagonal-stripe rectangle + "Home · Table · Quiet hour" overlay + dark-navy "THE POINT" callout box) per the user-supplied design direction. Same posture as NP's Meridian — intentional editorial choice, not "design unfinished." Real photography is an optional future enhancement, not a firm SAC blocker. Decision-point comes after the first ad-test cohort (mirror NP's `<ArchMotif>` posture in playbook 02 Part 2.5).
 - **Heritage A2P 10DLC second number** — deferred. Heritage shares NP's `TWILIO_FROM_NUMBER`. STOPs from Heritage SMS recipients land on NP's webhook with `source_brand='northgate-protection'`; the gap is documented in the 2026-05-03 Plan 2a CHANGELOG entry as a known compliance imprecision (suppression *enforcement* stays cross-brand and correct; *attribution* on the suppression row is unreliable for "which brand triggered the STOP" — answer comes from Twilio's API message log). Provision a separate number when Heritage volume justifies the ~2-6 week separate A2P 10DLC application timeline.
-- **Heritage `AGENT_PHONE_NUMBER`** — currently same as NP per Plan 2b Decision #11 (Phase 1 one-agent commitment per § 1 + § 7). If business model changes pre-Phase-2 to separate buying agent per brand, treat as a normal 5-place env-var rotation.
+- **Heritage `AGENT_PHONE_NUMBER`** — currently same as NP per Plan 2b Decision #11 (Phase 1 one-agent commitment per § 1 + § 7). If business model changes pre-Phase-2 to separate buying agent per brand, treat as a normal 7-place env-var rotation (post-Plan-3).
+- **Platform Vercel project setup** — `apps/platform/` is in local dev only until the user creates the Vercel project per the checklist in the 2026-05-04 Plan 3 CHANGELOG entry. Slug: `mpl-platform.vercel.app` (consumer-brand-neutral; matches `mpl-dev` Supabase naming). Includes Supabase Auth Site URL + Redirect URL configuration + pilot-user provisioning steps.
+- **Platform custom domain** — gates on LLC + brand decision (same posture as NP/Heritage custom domains).
+- **Platform Supabase Auth custom SMTP via Resend** — deferred per Plan 3 architect demotion. Default Supabase Auth (`noreply@mail.app.supabase.io`) is acceptable for invite-only Phase 1 with small platform user count, but configure custom SMTP via Resend BEFORE inviting the actual pilot agent (Supabase's generic domain lands in spam often enough to make the agent's first impression of the platform "did you get my email" → "check spam"). One Supabase Auth dashboard config screen.
+- **Platform `agent_id` auto-assignment on intake** — currently `/api/leads` doesn't set `agent_id` on inserts, so the pilot agent's leads-table view will be empty until either (a) a backfill SQL populates `agent_id` on existing leads to that agent, or (b) intake is wired to default-assign new leads to the (single) Phase 1 agent. Worth a small follow-up plan when the buying agent is real.
+- **Platform `HEALTH_CHECK_SECRET` re-rotation pre-launch** — same discipline as NP/Heritage. Production secret rotated fresh during Vercel project setup; rotate again after attorney pass and before first ad spend.
 - **Form "~50s left" indicator.** Borderline false-urgency framing (architect-flagged) kept in for now per developer call to "see how it looks" in preview. Revisit after live preview review — drop entirely or reword to "About 50 seconds total" (descriptive, non-pressuring).
 - **Real attorney-reviewed legal text** — replaces the v1-draft consent text (playbook 4.3) AND the placeholder content on `/privacy` + `/terms` (currently a yellow-banner draft with bracket-marker `[PLACEHOLDER]` slots throughout). Legal review is one cross-cutting task, not three.
 - Twilio A2P 10DLC registration — needs LLC + EIN. Until done, outbound SMS is silently dropped at the carrier (Twilio API returns success; messages show `status=undelivered` with carrier error 30034 for long-codes / 30032 for toll-free TFV). Code is right; delivery is paperwork-blocked.

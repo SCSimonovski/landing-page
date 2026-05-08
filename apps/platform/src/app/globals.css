@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+/*
+ * Utilitarian / internal-tool palette. NOT a consumer brand.
+ * Slate + white + blue accent for links/CTAs. Brand colors (sage NP,
+ * terracotta Heritage) appear only as small in-table badges via the
+ * Badge component — at-a-glance distinction in the leads table is the
+ * one place consumer-brand color is useful here.
+ */
+:root {
+  --background: #FFFFFF;
+  --foreground: #0F172A;
+  --foreground-soft: #1E293B;
+  --muted: #64748B;
+  --border: #E2E8F0;
+  --hover: #F8FAFC;
+  --accent: #2563EB;
+  --accent-hover: #1D4ED8;
+
+  /* In-table badge colors — pulled from the consumer brand palettes */
+  --badge-np-bg: #DCE6DF;
+  --badge-np-fg: #2F4A40;
+  --badge-heritage-bg: #F4DDD5;
+  --badge-heritage-fg: #5C2D26;
+  --badge-temp-hot-bg: #FECACA;
+  --badge-temp-hot-fg: #991B1B;
+  --badge-temp-warm-bg: #FED7AA;
+  --badge-temp-warm-fg: #9A3412;
+  --badge-temp-cold-bg: #DBEAFE;
+  --badge-temp-cold-fg: #1E3A8A;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-foreground-soft: var(--foreground-soft);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-hover: var(--hover);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --font-sans: var(--font-geist);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
