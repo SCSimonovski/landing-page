@@ -151,7 +151,7 @@ After build: update § 9 here (next task), append an entry to `docs/CHANGELOG.md
 
 **One reviewer.** The developer presents plans to Claude.ai (the project chat) for review. No second AI reviewer in Phase 1; that comes when Phase 2 (the platform app) starts.
 
-**Tests.** Pure-function business logic (intent scoring, validation, template byte-identity, phone normalization, STOP keyword detection, SMS dispatcher routing, platform query/URL helpers) is covered by vitest. Run `pnpm test` for the unit suite (~9 files / 140+ assertions / <2s); `pnpm test:watch` for the dev loop. Test files are co-located with sources (`<source>.test.ts`). Integration tests (DB writes, dispatch side effects, Twilio webhook, RLS verification) stay as bespoke `tsx` scripts in `scripts/` — see `test-dispatch-suppression.ts` and `test-platform-rls.ts` for the pattern. The `test-platform-rls.ts` script signs JWTs locally with `SUPABASE_JWT_SECRET` to exercise authenticated-user RLS contexts (service-role-based scripts bypass RLS and can't test it). No CI / no coverage gates / no UI snapshots in Phase 1.
+**Tests.** Pure-function business logic (intent scoring, validation, template byte-identity, phone normalization, STOP keyword detection, SMS dispatcher routing, platform query/URL helpers) is covered by vitest. Run `pnpm test` for the unit suite (~9 files / 140+ assertions / <2s); `pnpm test:watch` for the dev loop. Test files are co-located with sources (`<source>.test.ts`). Integration tests (DB writes, dispatch side effects, Twilio webhook, RLS verification) stay as bespoke `tsx` scripts in `scripts/` — see `test-dispatch-suppression.ts` and `test-platform-rls.ts` for the pattern. The `test-platform-rls.ts` script creates real test users via `auth.admin.createUser` (Admin API) and signs them in via `signInWithPassword` to exercise authenticated-user RLS contexts with real Supabase-issued JWTs (service-role-based scripts bypass RLS and can't test it; local JWT signing was considered and rejected — depends on the Legacy JWT Secret which Supabase has flagged as legacy). No CI / no coverage gates / no UI snapshots in Phase 1.
 
 ---
 
@@ -204,7 +204,7 @@ After build: update § 9 here (next task), append an entry to `docs/CHANGELOG.md
   6. Vercel: Northgate Heritage project's Environment Variables
   7. Vercel: mpl-platform project's Environment Variables
 
-  Run `pnpm verify-envs` before pushing to confirm the local-side four are in sync (key sets only — values legitimately differ per environment). Vercel-side requires manual per-project dashboard verification. **After any rotation, redeploy each Vercel project** to pick up the new value (Vercel does NOT auto-redeploy on env-var changes). Currently 17 keys × 4 local locations (will become 18 once `SUPABASE_JWT_SECRET` is added across all four for `test-platform-rls.ts`).
+  Run `pnpm verify-envs` before pushing to confirm the local-side four are in sync (key sets only — values legitimately differ per environment). Vercel-side requires manual per-project dashboard verification. **After any rotation, redeploy each Vercel project** to pick up the new value (Vercel does NOT auto-redeploy on env-var changes). Currently 17 keys × 4 local locations.
 
 ---
 
