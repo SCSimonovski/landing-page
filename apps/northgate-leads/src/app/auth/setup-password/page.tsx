@@ -29,6 +29,20 @@ export default function SetupPasswordPage() {
     async function verify() {
       const supabase = createSupabaseBrowserClient();
 
+      // Short-circuit if a session already exists (React Strict Mode runs
+      // effects twice in dev — first mount's exchange / setSession
+      // succeeded + cleared single-use tokens; second mount would otherwise
+      // fail). Also handles back-button + refresh after a successful pass.
+      const {
+        data: { session: existing },
+      } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (existing) {
+        window.history.replaceState(null, "", window.location.pathname);
+        setStatus({ kind: "ready" });
+        return;
+      }
+
       // PKCE flow: ?code=... in query (used if Supabase ever switches
       // dashboard invite to PKCE; today it uses implicit, but harmless
       // to handle both for symmetry with reset-password).

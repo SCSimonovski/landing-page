@@ -26,6 +26,21 @@ export default function ResetPasswordPage() {
     async function verify() {
       const supabase = createSupabaseBrowserClient();
 
+      // Short-circuit if a session already exists (React Strict Mode runs
+      // effects twice in dev — first mount's exchange succeeded + cleared
+      // the PKCE verifier; second mount's exchange would otherwise fail
+      // with "verifier not found"). Also handles back-button + refresh
+      // after a successful exchange.
+      const {
+        data: { session: existing },
+      } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (existing) {
+        window.history.replaceState(null, "", window.location.pathname);
+        setStatus({ kind: "ready" });
+        return;
+      }
+
       // PKCE flow (browser-client resetPasswordForEmail): ?code=... in query.
       const code = new URLSearchParams(window.location.search).get("code");
       if (code) {
