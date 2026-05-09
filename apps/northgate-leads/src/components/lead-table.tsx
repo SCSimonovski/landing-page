@@ -132,11 +132,14 @@ export function LeadTable({
       <Table>
         <TableHeader>
           <TableRow>
-            {isAdmin && <LeadHeaderCheckbox visibleIds={visibleIds} />}
+            <LeadHeaderCheckbox visibleIds={visibleIds} />
             <SortHead column="created_at" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Created</SortHead>
             <TableHead>Brand</TableHead>
             <TableHead>Product</TableHead>
             <SortHead column="status" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Status</SortHead>
+            {isAdmin && (
+              <SortHead column="assigned_agent_name" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Assigned</SortHead>
+            )}
             <SortHead column="last_name" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Name</SortHead>
             <TableHead>Phone</TableHead>
             <TableHead>Email</TableHead>
@@ -144,9 +147,6 @@ export function LeadTable({
             <SortHead column="age" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Age</SortHead>
             <SortHead column="intent_score" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Score</SortHead>
             <TableHead>Details</TableHead>
-            {isAdmin && (
-              <SortHead column="assigned_agent_name" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Assigned</SortHead>
-            )}
             <TableHead>DNC</TableHead>
           </TableRow>
         </TableHeader>

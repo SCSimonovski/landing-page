@@ -121,7 +121,7 @@ export function LeadRow({
       onClick={() => router.push(`/leads/${lead.id}`)}
       className="cursor-pointer"
     >
-      {isAdmin && <LeadRowCheckbox leadId={lead.id} />}
+      <LeadRowCheckbox leadId={lead.id} />
       <TableCell className="whitespace-nowrap text-muted-foreground">
         {formatCreated(lead.created_at)}
       </TableCell>
@@ -140,6 +140,13 @@ export function LeadRow({
           {LEAD_STATUS_LABEL[lead.status]}
         </Badge>
       </TableCell>
+      {isAdmin && (
+        <TableCell className="whitespace-nowrap text-foreground">
+          {lead.agent?.full_name ?? (
+            <span className="text-muted-foreground italic">— unassigned —</span>
+          )}
+        </TableCell>
+      )}
       <TableCell className="whitespace-nowrap text-foreground">
         {lead.first_name} {lead.last_name}
       </TableCell>
@@ -173,13 +180,6 @@ export function LeadRow({
       <TableCell className="text-xs text-muted-foreground">
         {renderDetails(lead.product, lead.details)}
       </TableCell>
-      {isAdmin && (
-        <TableCell className="whitespace-nowrap text-foreground">
-          {lead.agent?.full_name ?? (
-            <span className="text-muted-foreground italic">— unassigned —</span>
-          )}
-        </TableCell>
-      )}
       <TableCell>
         {lead.on_dnc && (
           <Badge variant="dnc" title="On DNC registry">

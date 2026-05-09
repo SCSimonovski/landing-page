@@ -80,13 +80,12 @@ export default async function LeadsPage({
 
   return (
     <LeadSelectionProvider>
-      {isAdmin && (
-        <BulkActionBar
-          isAdmin={isAdmin}
-          agents={agentsForFilter ?? []}
-          leads={leadsForBulk}
-        />
-      )}
+      <BulkActionBar
+        isAdmin={isAdmin}
+        agents={agentsForFilter ?? []}
+        leads={leadsForBulk}
+      />
+
       {errorMsg && (
         <div className="border-b bg-destructive/5 px-6 py-3">
           <div className="mx-auto max-w-7xl">

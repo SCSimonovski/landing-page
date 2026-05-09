@@ -1,15 +1,13 @@
 "use client";
 
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertTriangleIcon } from "lucide-react";
@@ -81,69 +79,95 @@ export function BulkConfirmDialog({
   if (!input) return null;
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:!max-w-2xl">
         {input.kind === "status" ? (
-          <StatusBody input={input} onConfirm={onConfirm} submitting={submitting} />
+          <StatusBody
+            input={input}
+            onConfirm={onConfirm}
+            onCancel={() => onOpenChange(false)}
+            submitting={submitting}
+          />
         ) : (
-          <AssignBody input={input} onConfirm={onConfirm} submitting={submitting} />
+          <AssignBody
+            input={input}
+            onConfirm={onConfirm}
+            onCancel={() => onOpenChange(false)}
+            submitting={submitting}
+          />
         )}
-      </AlertDialogContent>
-    </AlertDialog>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 function StatusBody({
   input,
   onConfirm,
+  onCancel,
   submitting,
 }: {
   input: BulkConfirmStatus;
   onConfirm: (ids: string[]) => Promise<void> | void;
+  onCancel: () => void;
   submitting: boolean;
 }) {
   const totalChange = input.safeIds.length + input.regressionIds.length;
   const hasRegressions = input.regressionIds.length > 0;
-  const noOpCount = Array.from(input.counts.entries())
-    .filter(([s]) => s === input.newStatus)
-    .reduce((acc, [, n]) => acc + n, 0);
   const newLabel = LEAD_STATUS_LABEL[input.newStatus];
 
   return (
     <>
-      <AlertDialogHeader>
-        <AlertDialogTitle>
+      <DialogHeader>
+        <DialogTitle>
           Set status → {newLabel} on {totalChange} lead
           {totalChange === 1 ? "" : "s"}?
-        </AlertDialogTitle>
-        <AlertDialogDescription asChild>
+        </DialogTitle>
+        <DialogDescription asChild>
           <div className="space-y-3 text-sm">
             <div>
               <p className="text-muted-foreground mb-1">Current status:</p>
               <ul className="space-y-1">
                 {Array.from(input.counts.entries())
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([s, n]) => (
-                    <li key={s} className="flex items-center gap-2">
-                      <Badge className={cn(LEAD_STATUS_BADGE_CLASS[s])}>
-                        {LEAD_STATUS_LABEL[s]}
-                      </Badge>
-                      <span>
-                        {n} lead{n === 1 ? "" : "s"}
-                        {s === input.newStatus && (
-                          <span className="text-muted-foreground italic ml-1">
-                            (already in target — will skip)
+                  // Skipped rows always last; otherwise sort by count desc.
+                  .sort(([sa, na], [sb, nb]) => {
+                    const aSkip = sa === input.newStatus;
+                    const bSkip = sb === input.newStatus;
+                    if (aSkip !== bSkip) return aSkip ? 1 : -1;
+                    return nb - na;
+                  })
+                  .map(([s, n]) => {
+                    const isNoOp = s === input.newStatus;
+                    const isReg =
+                      !isNoOp && isStatusRegression(s, input.newStatus);
+                    return (
+                      <li
+                        key={s}
+                        className={cn(
+                          "flex items-center gap-2",
+                          isNoOp && "opacity-50",
+                        )}
+                      >
+                        <Badge className={cn(LEAD_STATUS_BADGE_CLASS[s])}>
+                          {LEAD_STATUS_LABEL[s]}
+                        </Badge>
+                        <span className="text-muted-foreground">·</span>
+                        <span className="font-mono text-xs">
+                          {n} lead{n === 1 ? "" : "s"}
+                        </span>
+                        {isNoOp && (
+                          <span className="text-muted-foreground italic text-xs">
+                            (will skip)
                           </span>
                         )}
-                        {s !== input.newStatus &&
-                          isStatusRegression(s, input.newStatus) && (
-                            <span className="text-destructive italic ml-1">
-                              (would regress)
-                            </span>
-                          )}
-                      </span>
-                    </li>
-                  ))}
+                        {isReg && (
+                          <span className="text-destructive italic text-xs">
+                            (would regress)
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
               </ul>
             </div>
             {hasRegressions && (
@@ -157,17 +181,17 @@ function StatusBody({
                 </p>
               </div>
             )}
-            {noOpCount > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {noOpCount} lead{noOpCount === 1 ? "" : "s"} already in{" "}
-                {newLabel} — will skip in either case (no-op).
-              </p>
-            )}
           </div>
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-        <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter className="flex-col sm:flex-row gap-2">
+        <Button
+          variant="outline"
+          onClick={() => onCancel()}
+          disabled={submitting}
+        >
+          Cancel
+        </Button>
         {hasRegressions && (
           <Button
             variant="outline"
@@ -176,23 +200,24 @@ function StatusBody({
             }
             disabled={submitting}
           >
-            Apply to all{" "}
-            {input.safeIds.length + input.regressionIds.length} (incl.{" "}
-            {input.regressionIds.length} downgrade
-            {input.regressionIds.length === 1 ? "" : "s"})
+            {input.safeIds.length + input.regressionIds.length === 1
+              ? "Apply"
+              : "Apply to all"}
           </Button>
         )}
-        <AlertDialogAction
-          onClick={() => onConfirm(input.safeIds)}
-          disabled={submitting || input.safeIds.length === 0}
-        >
-          {submitting
-            ? "Applying…"
-            : hasRegressions
-              ? `Apply to ${input.safeIds.length} (skip downgrades)`
-              : `Apply to ${input.safeIds.length}`}
-        </AlertDialogAction>
-      </AlertDialogFooter>
+        {input.safeIds.length > 0 && (
+          <Button
+            onClick={() => onConfirm(input.safeIds)}
+            disabled={submitting}
+          >
+            {submitting
+              ? "Applying…"
+              : hasRegressions
+                ? "Skip downgrades"
+                : "Apply"}
+          </Button>
+        )}
+      </DialogFooter>
     </>
   );
 }
@@ -200,61 +225,95 @@ function StatusBody({
 function AssignBody({
   input,
   onConfirm,
+  onCancel,
   submitting,
 }: {
   input: BulkConfirmAssign;
   onConfirm: (ids: string[]) => Promise<void> | void;
+  onCancel: () => void;
   submitting: boolean;
 }) {
   const total = input.applyIds.length;
-  const noOpCount = (input.counts.get(input.newAgentLabel) ?? 0);
+  // Count of leads being pulled from a non-target, non-null agent — i.e.,
+  // taken from another agent's pipeline. Excludes "Unassigned" + the target.
+  const pulledCount = Array.from(input.counts.entries())
+    .filter(([label]) => label !== input.newAgentLabel && label !== "Unassigned")
+    .reduce((acc, [, n]) => acc + n, 0);
 
   return (
     <>
-      <AlertDialogHeader>
-        <AlertDialogTitle>
+      <DialogHeader>
+        <DialogTitle>
           Reassign {total} lead{total === 1 ? "" : "s"} → {input.newAgentLabel}?
-        </AlertDialogTitle>
-        <AlertDialogDescription asChild>
+        </DialogTitle>
+        <DialogDescription asChild>
           <div className="space-y-3 text-sm">
             <div>
               <p className="text-muted-foreground mb-1">Currently assigned to:</p>
               <ul className="space-y-1">
                 {Array.from(input.counts.entries())
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([label, n]) => (
-                    <li key={label} className="flex items-center gap-2">
-                      <span className="font-medium">{label}</span>
-                      <span className="text-muted-foreground">
-                        {n} lead{n === 1 ? "" : "s"}
-                        {label === input.newAgentLabel && (
-                          <span className="italic ml-1">
-                            (no-op — already with target)
+                  // Skipped rows always last; otherwise sort by count desc.
+                  .sort(([la, na], [lb, nb]) => {
+                    const aSkip = la === input.newAgentLabel;
+                    const bSkip = lb === input.newAgentLabel;
+                    if (aSkip !== bSkip) return aSkip ? 1 : -1;
+                    return nb - na;
+                  })
+                  .map(([label, n]) => {
+                    const isNoOp = label === input.newAgentLabel;
+                    return (
+                      <li
+                        key={label}
+                        className={cn(
+                          "flex items-center gap-2",
+                          isNoOp && "opacity-50",
+                        )}
+                      >
+                        <span className="font-medium">{label}</span>
+                        <span className="text-muted-foreground">·</span>
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {n} lead{n === 1 ? "" : "s"}
+                        </span>
+                        {isNoOp && (
+                          <span className="text-muted-foreground italic text-xs">
+                            (will skip)
                           </span>
                         )}
-                      </span>
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
               </ul>
             </div>
-            {noOpCount > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {noOpCount} lead{noOpCount === 1 ? "" : "s"} already with{" "}
-                {input.newAgentLabel} — will skip (no-op).
-              </p>
+            {pulledCount > 0 && (
+              <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
+                <AlertTriangleIcon className="size-4 shrink-0 text-amber-700 mt-0.5" />
+                <p className="text-amber-800 text-sm">
+                  {`${pulledCount} lead${pulledCount === 1 ? "" : "s"} will be pulled from their current agents. They'll lose access immediately on save.`}
+                </p>
+              </div>
             )}
           </div>
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
-        <AlertDialogAction
+        </DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <Button
+          variant="outline"
+          onClick={() => onCancel()}
+          disabled={submitting}
+        >
+          Cancel
+        </Button>
+        <Button
           onClick={() => onConfirm(input.applyIds)}
           disabled={submitting || total === 0}
         >
-          {submitting ? "Reassigning…" : `Reassign all ${total}`}
-        </AlertDialogAction>
-      </AlertDialogFooter>
+          {submitting
+            ? "Reassigning…"
+            : total === 1
+              ? "Reassign"
+              : "Reassign all"}
+        </Button>
+      </DialogFooter>
     </>
   );
 }
