@@ -1,9 +1,8 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useActionState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,14 +14,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { loginAction, type LoginActionState } from "./actions";
 
-type Status =
-  | { kind: "idle" }
-  | { kind: "submitting" }
-  | { kind: "error"; message: string };
-
-// Map error param keys (set by /leads/page.tsx redirects + by requireAdmin)
-// to user-facing copy. Keep the key set narrow — anything else is ignored.
 const ERROR_MESSAGES: Record<string, string> = {
   not_provisioned:
     "Your account hasn't been set up yet. Ask your administrator to invite you.",
@@ -31,10 +24,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   insufficient_role: "You don't have access to that page.",
 };
 
-// Reads ?error=... from the URL. Lives in its own subcomponent so it can
-// be wrapped in Suspense — Next 16 errors at build time if useSearchParams
-// is called outside a Suspense boundary on a route it tries to statically
-// render.
+// useSearchParams must sit inside a Suspense boundary in Next 16.
 function LoginErrorBanner() {
   const params = useSearchParams();
   const key = params.get("error");
@@ -50,35 +40,19 @@ function LoginErrorBanner() {
   );
 }
 
+function NextHidden() {
+  const params = useSearchParams();
+  const next = params.get("next") ?? "/leads";
+  return <input type="hidden" name="next" value={next} />;
+}
+
+const initialState: LoginActionState = { error: null };
+
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [status, setStatus] = useState<Status>({ kind: "idle" });
-  const router = useRouter();
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email || !password) return;
-    setStatus({ kind: "submitting" });
-
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    });
-
-    if (error) {
-      setStatus({ kind: "error", message: error.message });
-      return;
-    }
-
-    const next =
-      typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("next") ?? "/leads"
-        : "/leads";
-    router.push(next);
-    router.refresh();
-  }
+  const [state, formAction, isPending] = useActionState(
+    loginAction,
+    initialState,
+  );
 
   return (
     <div className="w-full max-w-md px-6 py-16">
@@ -94,46 +68,40 @@ export default function LoginPage() {
           <Suspense fallback={null}>
             <LoginErrorBanner />
           </Suspense>
-          <form
-            onSubmit={onSubmit}
-            noValidate
-            className="mt-4 flex flex-col gap-4"
-          >
+          <form action={formAction} className="mt-4 flex flex-col gap-4">
+            <Suspense fallback={null}>
+              <NextHidden />
+            </Suspense>
             <div className="flex flex-col gap-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
+                name="email"
                 type="email"
                 inputMode="email"
                 autoComplete="email"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                disabled={status.kind === "submitting"}
+                disabled={isPending}
               />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
+                name="password"
                 type="password"
                 autoComplete="current-password"
                 required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={status.kind === "submitting"}
+                disabled={isPending}
               />
             </div>
-            <Button
-              type="submit"
-              disabled={status.kind === "submitting" || !email || !password}
-            >
-              {status.kind === "submitting" ? "Signing in..." : "Sign in"}
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Signing in..." : "Sign in"}
             </Button>
-            {status.kind === "error" && (
+            {state.error && (
               <p role="alert" className="text-sm text-destructive">
-                {status.message}
+                {state.error}
               </p>
             )}
           </form>
