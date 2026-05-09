@@ -4,6 +4,76 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-05-09 — Plan 5: Northgate Leads v0.3 (lead detail + status + assignment + notes + /account + RPC-only-writes)
+
+Plan 5 per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. Closes the three operator gaps Plan 4's smoke surfaced: no in-app lead assignment (was SQL-only), no agent status updates (`leads.status` enum sat unused), no profile / password change UI. Architectural lock-in: **all row-scoped writes from `authenticated` flow through SECURITY DEFINER RPCs**, NOT direct UPDATE grants — Plan 5 is where the RPC-only-writes pattern gets written into the codebase as the convention.
+
+**Schema discoveries that significantly tightened scope:**
+- `leads.status` ENUM column already existed (`new / contacted / appointment / sold / dead / refunded`, 6 states aligned with playbook 04 KPIs). Resolved Claude Web's "wrong vocabulary" risk by using what's there. Captures appointment_rate / close_rate / refund_rate directly; reach_rate is partially derivable (`1 - count(new)/total`) but doesn't distinguish "no answer" from "answered" — see OOB note for the `no_answer` follow-up.
+- `lead_event_type` enum already had `created`, `status_change`, `note_added` (+ infra events). `insert_lead_with_consent` already writes `created` events for every new lead — **no backfill needed; no `/api/leads` change.**
+- `leads.notes` + `leads.outcome` columns already existed, currently unused. Surfaced `notes` on the detail page.
+
+**Migration** (`20260509012042_v03_rpcs_and_lead_events_actor.sql`): adds `lead_events.actor_platform_user_id` (nullable FK to `platform_users(id)`); adds `'assigned'` to `lead_event_type` enum; adds 5 SECURITY DEFINER RPCs (all `set search_path = public`, all `EXECUTE` granted to `authenticated`):
+- `update_lead_status(p_lead_id, p_new_status)` — agent on own leads OR admin/superadmin. No-op short-circuit. Atomic update + `status_change` event with actor.
+- `update_lead_notes(p_lead_id, p_notes)` — same auth scope. Soft-truncates at 1000 chars (paste-from-CRM tolerance). `note_added` event.
+- `assign_lead(p_lead_id, p_new_agent_id)` — admin/superadmin only. NULL = unassign. `assigned` event.
+- `set_platform_user_active(p_target_user_id, p_new_active)` — admin/superadmin. **Refuses self-deactivation; refuses admin deactivating a superadmin** (first place admin diverges from superadmin per Plan 3 Decision #3; superadmin-on-superadmin is allowed).
+- `update_agent_profile(p_full_name, p_license_states)` — caller must have an `agents` row. **Raises `'no agent row for current user'` for admin/superadmin callers** — UI hides the section but RPC defends in depth.
+
+Adds SELECT grants + role-aware policies on `consent_log` and `lead_events` (admin/superadmin all; agent own-lead via `leads.agent_id` join). NO direct UPDATE / INSERT / DELETE grants on any of these tables for `authenticated` — writes only through the RPCs.
+
+**Fix-up migration** (`20260509013034_grant_service_role_consent_lead_events_delete.sql`): pre-existing baseline-era gap — `service_role` lacked DELETE on `consent_log` + `lead_events`. Surfaced when `test-platform-rls.ts` cleanup tried to delete test fixtures. Same pattern as Plan 3's `20260504130000_grant_service_role_platform_users.sql` fix-up.
+
+**Lead detail page** (`/leads/[id]`): single-page card stack (no tabs):
+- Header: name + `<LeadStatusSelect>` (color-coded badge per status) + `<LeadAssignSelect>` (admin-only)
+- Contact info, per-product details, **notes editor** (debounced 1s idle auto-save — NOT blur), Compliance card (`consent_log` rows), Activity timeline (`lead_events` reverse chronological with actor display)
+- Activity copy: type-specific per event_type (`status_change` renders both badges inline; `assigned`/`note_added`/`created`/system events all custom)
+- Actor display: `agents.full_name` for agent actors, `email` for admin/superadmin, "system" for NULL
+- Empty states: "No consent records found for this lead." (anomaly — should never fire) / "No activity yet."
+- RLS: if user can't see this lead, the SELECT returns null → `notFound()`.
+
+**`/users` polish:** active/inactive toggle column with shadcn `<Switch>` calling `set_platform_user_active`. Self-toggle and admin→superadmin both client-side disabled with tooltip; RPC also enforces (defense in depth).
+
+**`/leads` polish:** status column added (color-coded badge); status sortable; **assigned-agent-name sortable** via Supabase's `foreignTable: "agent"` option; status filter (multi-select FilterMenu, 6 options, `?status=x&status=y`); **click row → navigate to detail** (`onClick + router.push` per Plan 4's asChild rule; `tel:`/`mailto:` cells `stopPropagation()`; `cursor-pointer` for affordance). Extracted per-row client wrapper (`<LeadRow>`) so the table chrome stays a Server Component.
+
+**`/account` page:** Sidebar gains an Account link (visible to all roles).
+- **Profile section** (server-side conditional, agents only): full_name + license_states via `update_agent_profile` RPC. Reuses extracted `<LicenseStatesPicker>` (also used by InviteUserDialog).
+- **Password section** (all roles): two-step — verify current via `signInWithPassword` (Supabase replaces session cookies in-place; no sign-out cycle), then `updateUser({ password })`. 8-char min matches setup-password convention.
+- **Email section** (all roles): read-only with disclaimer: "Contact your administrator to change your email." Email change deferred — JWT identity + `platform_users.email` join-key + Supabase Auth confirmation flow is real scope (v0.4 OOB).
+
+**Verification** (`scripts/test-platform-rls.ts` extended from 8 → **47 assertions**, ~40s runtime):
+- All 5 RPCs: agent-on-own success / agent-on-other denied / admin success matrix
+- `assigned` event written with correct actor; `status_change` event written with correct actor
+- `set_platform_user_active`: admin self-deactivation refused; admin → superadmin refused (first divergence); superadmin → superadmin allowed; agent → permission denied
+- `update_agent_profile`: agent on own → success; admin (no agent row) → loud failure; agent submitting empty `license_states` → validation error
+- SELECT-policy tests: agent sees own-lead consent_log + lead_events; agent sees 0 rows for other agents' leads; anon blocked on both tables
+- **Anti-grant test**: agent calling `.from('leads').update({ on_dnc: true })` → permission denied (defends the RPC-only-writes pattern against a future migration accidentally adding the grant)
+- Cleanup: deletes lead_events + consent_log + leads + agents + platform_users + auth.users in FK-safe order; verified clean by re-running the script back-to-back.
+
+**Branch:** `v03-platform` off `main` (Plan 4's `shadcn-refactor` merged via PR #8 first per Plan 5 sequencing decision).
+
+**Tests:** vitest stays at 10 files / 192 tests (added 4 new assertions in `leads-query.test.ts` covering status filter + foreignTable sort + status validation; the integration RPC coverage lives in `test-platform-rls.ts`).
+
+**Decisions locked** (full table in plan file): 26 entries; key ones:
+- D#1 Status enum: existing 6 (no churn)
+- D#13 RPC-only-writes pattern: locked
+- D#7 admin cannot deactivate superadmin (first divergence point)
+- D#22 click-row-to-detail: `onClick + router.push` (NOT `<TableRow asChild><Link>`)
+- D#23 no-op short-circuit on status/notes/assignment unchanged
+
+**Open follow-ups** (post-Plan-5):
+- Email change on /account (Supabase Auth confirmation flow + `platform_users.email` sync; defer to v0.4)
+- `no_answer` 7th status state — if agent feedback says reach_rate granularity matters
+- Refund workflow (v0.4) — the `refunded` enum value is wired but no programmatic flow yet; admin manually marks for now
+- Bulk reassignment when an agent leaves
+- Notification on assignment (silent today)
+- Search by name/phone/email (defer until volume)
+- Docs pass omnibus (status enum vocabulary in playbook 04 § 3.1; RPC-only-writes pattern in AGENTS.md § 6 — already done; Plan 3 magic-link → password decision-log; northgate-leads rename; asChild convention from Plan 4; sortable headers reversal of Plan 3 Decision #20)
+
+NP + Heritage runtime byte-identical (no consumer-app changes; `/api/leads` already inserts `created` event via existing `insert_lead_with_consent` RPC).
+
+---
+
 ## 2026-05-09 — Plan 4 polish pass (palette, filters, sortable headers, pending-invite, cursor, hydration)
 
 Same `shadcn-refactor` branch — picked up the previous day's UI smoke feedback. No schema or RLS changes.

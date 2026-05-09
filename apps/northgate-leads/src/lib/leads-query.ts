@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@platform/shared/types/database";
 import { getMulti, getSingle, type SearchParams } from "./url-params";
+import {
+  isLeadStatus,
+  type LeadStatus,
+} from "./leads/lead-status-options";
 
 // Loose Supabase client typing. `@supabase/ssr`'s createServerClient and
 // `@supabase/supabase-js`'s SupabaseClient have different generic arities
@@ -14,7 +18,9 @@ export type SortColumn =
   | "last_name"
   | "state"
   | "age"
-  | "intent_score";
+  | "intent_score"
+  | "status"
+  | "assigned_agent_name";
 export type SortDir = "asc" | "desc";
 
 export type LeadFilters = {
@@ -23,6 +29,7 @@ export type LeadFilters = {
   products: string[];
   temps: Array<"hot" | "warm" | "cold">;
   agents: string[]; // agent.id values, OR the literal "unassigned"
+  statuses: LeadStatus[];
   // Single-value:
   since?: "7d" | "30d" | "90d";
   // User-controllable sort. undefined = default (created_at desc).
@@ -44,14 +51,18 @@ const SINCE_VALUES = new Set(["7d", "30d", "90d"]);
 // typo'd values from reaching Supabase's .order() and surfacing as confusing
 // "column does not exist" errors. Brand / product / temperature are filters,
 // not useful sort dimensions; phone / email alphabetical sort is weird;
-// details is JSONB; agent_id sort approximates "assigned" and is omitted
-// for v0.2 simplicity.
+// details is JSONB.
+//
+// `assigned_agent_name` is a special case in buildLeadsQuery: it sorts by
+// the joined agents.full_name column via Supabase's `foreignTable` option.
 const SORT_COLUMNS = new Set<SortColumn>([
   "created_at",
   "last_name",
   "state",
   "age",
   "intent_score",
+  "status",
+  "assigned_agent_name",
 ]);
 
 // Parse search params from a Next 16 page.tsx into a typed filters object.
@@ -80,11 +91,16 @@ export function parseFilters(params: SearchParams): LeadFilters {
   const dirRaw = getSingle(params, "dir");
   const dir: SortDir = dirRaw === "asc" ? "asc" : "desc";
 
+  const statuses = getMulti(params, "status").filter((s) =>
+    isLeadStatus(s),
+  ) as LeadStatus[];
+
   return {
     brands: getMulti(params, "brand"),
     products: getMulti(params, "product"),
     temps,
     agents: getMulti(params, "agent"),
+    statuses,
     since: sinceTyped,
     sort,
     dir,
@@ -125,19 +141,32 @@ export function buildLeadsQuery(
   // Default sort: created_at desc. User-controllable sort overrides via
   // ?sort=<column>&dir=<asc|desc>; the column is whitelisted in
   // parseFilters so .order() never sees an arbitrary string.
-  const sortCol = filters.sort ?? "created_at";
+  //
+  // assigned_agent_name is the foreign-table special case — sorts by the
+  // joined agents.full_name via Supabase's `foreignTable` option. Skipped
+  // for agent role (their leads are all theirs; agent join not selected).
   const ascending = filters.dir === "asc";
+  let q = supabase.from("leads").select(select, { count: "exact" });
 
-  let q = supabase
-    .from("leads")
-    .select(select, { count: "exact" })
-    .order(sortCol, { ascending });
+  if (
+    filters.sort === "assigned_agent_name" &&
+    role !== "agent"
+  ) {
+    q = q.order("full_name", { foreignTable: "agent", ascending });
+  } else {
+    const sortCol = filters.sort ?? "created_at";
+    // Skip the assigned_agent_name case for agent role; fall back to default.
+    const safeCol =
+      sortCol === "assigned_agent_name" ? "created_at" : sortCol;
+    q = q.order(safeCol, { ascending });
+  }
 
   // Multi-value filters use .in(). Single value works too (Supabase handles
   // a 1-element array fine). Empty array = no filter applied.
   if (filters.brands.length > 0) q = q.in("brand", filters.brands);
   if (filters.products.length > 0) q = q.in("product", filters.products);
   if (filters.temps.length > 0) q = q.in("temperature", filters.temps);
+  if (filters.statuses.length > 0) q = q.in("status", filters.statuses);
 
   const cutoff = sinceToCutoff(filters.since);
   if (cutoff) q = q.gte("created_at", cutoff);

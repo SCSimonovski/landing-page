@@ -5,9 +5,8 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { US_STATES } from "@platform/shared/validation/common";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { LicenseStatesPicker } from "@/components/license-states-picker";
 import {
   Dialog,
   DialogContent,
@@ -170,32 +169,10 @@ export function InviteUserDialog() {
                         Pick every state the agent is licensed in.
                       </FormDescription>
                       <FormControl>
-                        <div className="grid grid-cols-6 gap-2 rounded-md border p-3 max-h-48 overflow-y-auto">
-                          {US_STATES.map((s) => {
-                            const selected = field.value?.includes(s) ?? false;
-                            return (
-                              <label
-                                key={s}
-                                className="flex items-center gap-1.5 text-xs cursor-pointer"
-                              >
-                                <Checkbox
-                                  checked={selected}
-                                  onCheckedChange={(checked) => {
-                                    const current = field.value ?? [];
-                                    if (checked) {
-                                      field.onChange([...current, s]);
-                                    } else {
-                                      field.onChange(
-                                        current.filter((x) => x !== s),
-                                      );
-                                    }
-                                  }}
-                                />
-                                <span className="font-mono">{s}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
+                        <LicenseStatesPicker
+                          value={field.value ?? []}
+                          onChange={field.onChange}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

@@ -1,17 +1,8 @@
 import Link from "next/link";
 import { ArrowDownIcon, ArrowUpIcon, ArrowUpDownIcon } from "lucide-react";
 import {
-  Badge,
-  brandLabel,
-  brandVariant,
-  productLabel,
-  productVariant,
-  tempVariant,
-} from "@/components/ui/badge";
-import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
@@ -25,10 +16,14 @@ import {
   type SearchParams,
 } from "@/lib/url-params";
 import { cn } from "@/lib/utils";
+import { LeadRow } from "@/components/lead-row";
+import type { LeadStatus } from "@/lib/leads/lead-status-options";
 
-// Loose type — the actual rows come from the typed Supabase query but this
-// component renders them generically for both agent + admin views.
-type LeadRow = {
+// Server Component. Renders the table chrome (headers + sortable links +
+// empty state). Each row is a LeadRow client component (handles
+// click-to-detail navigation per Plan 5 Decision #22).
+
+type LeadRowData = {
   id: string;
   created_at: string;
   brand: string;
@@ -41,35 +36,12 @@ type LeadRow = {
   age: number;
   intent_score: number;
   temperature: string;
+  status: LeadStatus;
   details: Record<string, unknown> | null;
   on_dnc: boolean;
   agent_id: string | null;
   agent?: { id: string; full_name: string } | null;
 };
-
-function formatPhone(e164: string): string {
-  // E.164 like +15555550199 → "(555) 555-0199"
-  const m = e164.match(/^\+1(\d{3})(\d{3})(\d{4})$/);
-  if (!m) return e164;
-  return `(${m[1]}) ${m[2]}-${m[3]}`;
-}
-
-function formatCreated(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(ms / 60_000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const d = new Date(iso);
-  const month = d.toLocaleString("en-US", { month: "short" });
-  const day = d.getDate();
-  let h = d.getHours();
-  const m = d.getMinutes().toString().padStart(2, "0");
-  const ampm = h >= 12 ? "p" : "a";
-  h = h % 12 || 12;
-  return `${month} ${day}, ${h}:${m}${ampm}`;
-}
 
 // Sortable column header. Lives at module scope (React 19 lints inner
 // component declarations as "components created during render").
@@ -110,49 +82,12 @@ function SortHead({
   );
 }
 
-function renderDetails(
-  product: string,
-  details: Record<string, unknown> | null,
-): string {
-  if (!details) return "— no details —";
-  if (product === "mortgage_protection") {
-    const balance = details.mortgage_balance;
-    const smoker = details.is_smoker;
-    const homeowner = details.is_homeowner;
-    if (
-      typeof balance !== "number" ||
-      typeof smoker !== "boolean" ||
-      typeof homeowner !== "boolean"
-    ) {
-      return "— details malformed —";
-    }
-    const balK = `$${Math.round(balance / 1000)}k mortgage`;
-    return `${balK} · ${smoker ? "smoker" : "non-smoker"} · ${homeowner ? "homeowner" : "non-homeowner"}`;
-  }
-  if (product === "final_expense") {
-    const cov = details.desired_coverage;
-    const smoker = details.is_smoker;
-    const health = details.has_major_health_conditions;
-    const ben = details.beneficiary_relationship;
-    if (
-      typeof cov !== "number" ||
-      typeof smoker !== "boolean" ||
-      typeof health !== "boolean" ||
-      typeof ben !== "string"
-    ) {
-      return "— details malformed —";
-    }
-    return `$${Math.round(cov / 1000)}k coverage · ${ben} · ${health ? "MAJOR conditions" : "no major"} · ${smoker ? "smoker" : "non-smoker"}`;
-  }
-  return `— unknown product: ${product} —`;
-}
-
 export function LeadTable({
   leads,
   role,
   searchParams,
 }: {
-  leads: LeadRow[];
+  leads: LeadRowData[];
   role: "agent" | "admin" | "superadmin";
   searchParams: SearchParams;
 }) {
@@ -162,6 +97,7 @@ export function LeadTable({
     getMulti(searchParams, "product").length > 0 ||
     getMulti(searchParams, "temp").length > 0 ||
     getMulti(searchParams, "agent").length > 0 ||
+    getMulti(searchParams, "status").length > 0 ||
     Boolean(getSingle(searchParams, "since"));
 
   if (leads.length === 0) {
@@ -186,8 +122,6 @@ export function LeadTable({
     );
   }
 
-  // Sortable column header — clicking cycles asc → desc → cleared (default).
-  // Pass current sort + dir down so SortHead doesn't re-read on every render.
   const sortCol = getSingle(searchParams, "sort");
   const sortDir = getSingle(searchParams, "dir");
 
@@ -199,6 +133,7 @@ export function LeadTable({
             <SortHead column="created_at" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Created</SortHead>
             <TableHead>Brand</TableHead>
             <TableHead>Product</TableHead>
+            <SortHead column="status" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Status</SortHead>
             <SortHead column="last_name" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Name</SortHead>
             <TableHead>Phone</TableHead>
             <TableHead>Email</TableHead>
@@ -206,76 +141,15 @@ export function LeadTable({
             <SortHead column="age" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Age</SortHead>
             <SortHead column="intent_score" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Score</SortHead>
             <TableHead>Details</TableHead>
-            {isAdmin && <TableHead>Assigned</TableHead>}
+            {isAdmin && (
+              <SortHead column="assigned_agent_name" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Assigned</SortHead>
+            )}
             <TableHead>DNC</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {leads.map((lead) => (
-            <TableRow key={lead.id}>
-              <TableCell className="whitespace-nowrap text-muted-foreground">
-                {formatCreated(lead.created_at)}
-              </TableCell>
-              <TableCell>
-                <Badge variant={brandVariant(lead.brand)}>
-                  {brandLabel(lead.brand)}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                <Badge variant={productVariant(lead.product)}>
-                  {productLabel(lead.product)}
-                </Badge>
-              </TableCell>
-              <TableCell className="whitespace-nowrap text-foreground">
-                {lead.first_name} {lead.last_name}
-              </TableCell>
-              <TableCell className="whitespace-nowrap font-mono text-xs">
-                <a
-                  href={`tel:${lead.phone_e164}`}
-                  className="text-link hover:text-link-hover"
-                >
-                  {formatPhone(lead.phone_e164)}
-                </a>
-              </TableCell>
-              <TableCell className="whitespace-nowrap text-xs">
-                <a
-                  href={`mailto:${lead.email}`}
-                  className="text-link hover:text-link-hover"
-                >
-                  {lead.email}
-                </a>
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {lead.state}
-              </TableCell>
-              <TableCell className="text-muted-foreground">{lead.age}</TableCell>
-              <TableCell className="whitespace-nowrap font-mono text-xs">
-                <span className="text-foreground">{lead.intent_score}</span>
-                <span className="text-muted-foreground">/90 </span>
-                <Badge variant={tempVariant(lead.temperature)}>
-                  {lead.temperature}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-xs text-muted-foreground">
-                {renderDetails(lead.product, lead.details)}
-              </TableCell>
-              {isAdmin && (
-                <TableCell className="whitespace-nowrap text-foreground">
-                  {lead.agent?.full_name ?? (
-                    <span className="text-muted-foreground italic">
-                      — unassigned —
-                    </span>
-                  )}
-                </TableCell>
-              )}
-              <TableCell>
-                {lead.on_dnc && (
-                  <Badge variant="dnc" title="On DNC registry">
-                    DNC
-                  </Badge>
-                )}
-              </TableCell>
-            </TableRow>
+            <LeadRow key={lead.id} lead={lead} isAdmin={isAdmin} />
           ))}
         </TableBody>
       </Table>

@@ -21,6 +21,7 @@ const baseFilters: LeadFilters = {
   products: [],
   temps: [],
   agents: [],
+  statuses: [],
   dir: "desc",
   page: 1,
   perPage: 50,
@@ -33,12 +34,25 @@ describe("parseFilters", () => {
       products: [],
       temps: [],
       agents: [],
+      statuses: [],
       since: undefined,
       sort: undefined,
       dir: "desc",
       page: 1,
       perPage: DEFAULT_PER_PAGE,
     });
+  });
+
+  it("parses multi-value status filter", () => {
+    expect(
+      parseFilters({ status: ["new", "contacted"] }).statuses,
+    ).toEqual(["new", "contacted"]);
+  });
+
+  it("filters out unknown status values", () => {
+    expect(
+      parseFilters({ status: ["new", "bogus"] }).statuses,
+    ).toEqual(["new"]);
   });
 
   it("parses valid sort + dir", () => {
@@ -73,6 +87,7 @@ describe("parseFilters", () => {
       products: ["final_expense"],
       temps: ["hot"],
       agents: ["abc-123"],
+      statuses: [],
       since: "30d",
       sort: undefined,
       dir: "desc",
@@ -204,6 +219,45 @@ describe("buildLeadsQuery", () => {
     );
     const order = calls.find((c) => c.method === "order");
     expect(order?.args).toEqual(["intent_score", { ascending: false }]);
+  });
+
+  it("status filter applied via .in", () => {
+    const { client, calls } = makeMockClient();
+    buildLeadsQuery(
+      { ...baseFilters, statuses: ["new", "contacted"] },
+      "agent",
+      client,
+    );
+    const inCalls = calls.filter((c) => c.method === "in");
+    expect(inCalls).toContainEqual({
+      method: "in",
+      args: ["status", ["new", "contacted"]],
+    });
+  });
+
+  it("admin: assigned_agent_name sort uses foreignTable=agent", () => {
+    const { client, calls } = makeMockClient();
+    buildLeadsQuery(
+      { ...baseFilters, sort: "assigned_agent_name", dir: "asc" },
+      "admin",
+      client,
+    );
+    const order = calls.find((c) => c.method === "order");
+    expect(order?.args).toEqual([
+      "full_name",
+      { foreignTable: "agent", ascending: true },
+    ]);
+  });
+
+  it("agent: assigned_agent_name sort falls back to default (no agent join)", () => {
+    const { client, calls } = makeMockClient();
+    buildLeadsQuery(
+      { ...baseFilters, sort: "assigned_agent_name", dir: "asc" },
+      "agent",
+      client,
+    );
+    const order = calls.find((c) => c.method === "order");
+    expect(order?.args).toEqual(["created_at", { ascending: true }]);
   });
 
   it("single brand filter via .in", () => {

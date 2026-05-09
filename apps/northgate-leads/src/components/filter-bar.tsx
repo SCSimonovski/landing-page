@@ -2,6 +2,10 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { FilterMenu } from "@/components/filter-menu";
 import { clearAll, getMulti, getSingle, type SearchParams } from "@/lib/url-params";
+import {
+  LEAD_STATUS_LABEL,
+  LEAD_STATUS_VALUES,
+} from "@/lib/leads/lead-status-options";
 
 type AgentOption = { id: string; full_name: string };
 
@@ -27,6 +31,11 @@ const SINCE_OPTIONS = [
   { value: "90d", label: "Last 90 days" },
 ];
 
+const STATUS_OPTIONS = LEAD_STATUS_VALUES.map((v) => ({
+  value: v,
+  label: LEAD_STATUS_LABEL[v],
+}));
+
 // Server Component. Composes per-category FilterMenu dropdowns +
 // "Reset all" link. Each FilterMenu handles its own URL navigation
 // internally (client component); FilterBar reads the current state
@@ -45,6 +54,7 @@ export function FilterBar({
   const brandsSelected = getMulti(searchParams, "brand");
   const productsSelected = getMulti(searchParams, "product");
   const tempsSelected = getMulti(searchParams, "temp");
+  const statusesSelected = getMulti(searchParams, "status");
   const sinceSelected = getSingle(searchParams, "since");
   const agentsSelected = getMulti(searchParams, "agent");
 
@@ -52,6 +62,7 @@ export function FilterBar({
     brandsSelected.length > 0 ||
     productsSelected.length > 0 ||
     tempsSelected.length > 0 ||
+    statusesSelected.length > 0 ||
     Boolean(sinceSelected) ||
     agentsSelected.length > 0;
 
@@ -78,6 +89,14 @@ export function FilterBar({
           paramKey="product"
           options={PRODUCT_OPTIONS}
           selected={productsSelected}
+          mode="multi"
+          searchParams={searchParams}
+        />
+        <FilterMenu
+          label="Status"
+          paramKey="status"
+          options={STATUS_OPTIONS}
+          selected={statusesSelected}
           mode="multi"
           searchParams={searchParams}
         />

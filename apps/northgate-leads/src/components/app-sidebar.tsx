@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutListIcon, UsersIcon, LogOutIcon } from "lucide-react";
+import {
+  LayoutListIcon,
+  UsersIcon,
+  LogOutIcon,
+  UserCircleIcon,
+} from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -48,6 +53,8 @@ export function AppSidebar({
     pathname === "/leads" || pathname.startsWith("/leads/");
   const isUsersActive =
     pathname === "/users" || pathname.startsWith("/users/");
+  const isAccountActive =
+    pathname === "/account" || pathname.startsWith("/account/");
 
   return (
     <Sidebar collapsible="icon">
@@ -94,6 +101,20 @@ export function AppSidebar({
                   </Link>
                 </SidebarMenuItem>
               )}
+              <SidebarMenuItem>
+                <Link
+                  href="/account"
+                  data-slot="sidebar-menu-button"
+                  data-sidebar="menu-button"
+                  data-size="default"
+                  data-active={isAccountActive}
+                  aria-current={isAccountActive ? "page" : undefined}
+                  className={cn(sidebarMenuButtonVariants({ size: "default" }))}
+                >
+                  <UserCircleIcon />
+                  <span>Account</span>
+                </Link>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

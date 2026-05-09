@@ -64,11 +64,13 @@ async function clientForUser(
 // Fixture emails (deterministic; cleanup keys on these).
 const TEST_PASSWORD = "test-rls-pw-12345";
 const SUPER_EMAIL = "test-rls-super@example.test";
+const SUPER2_EMAIL = "test-rls-super2@example.test"; // Plan 5: superadmin-on-superadmin deactivation
 const ADMIN_EMAIL = "test-rls-admin@example.test";
 const AGENT_A_EMAIL = "test-rls-agent-a@example.test";
 const AGENT_B_EMAIL = "test-rls-agent-b@example.test";
 const ALL_FIXTURE_EMAILS = [
   SUPER_EMAIL,
+  SUPER2_EMAIL,
   ADMIN_EMAIL,
   AGENT_A_EMAIL,
   AGENT_B_EMAIL,
@@ -89,16 +91,34 @@ function assert(label: string, ok: boolean, detail?: string) {
 }
 
 async function cleanup() {
-  // Order: leads → agents → platform_users → auth.users (FK chain).
+  // Order: lead_events / consent_log → leads → agents → platform_users →
+  // auth.users (FK chain). consent_log + lead_events have no ON DELETE
+  // CASCADE on their leads FK, so they must be deleted first.
+  // ALSO: lead_events.actor_platform_user_id → platform_users has no
+  // ON DELETE CASCADE either, so we need to clear those references before
+  // deleting platform_users (orphan events from earlier runs would block).
+  const { data: testLeads } = await sr
+    .from("leads")
+    .select("id")
+    .like("first_name", "TestRLS%");
+  if (testLeads && testLeads.length > 0) {
+    const leadIds = testLeads.map((l) => l.id);
+    await sr.from("lead_events").delete().in("lead_id", leadIds);
+    await sr.from("consent_log").delete().in("lead_id", leadIds);
+  }
   await sr.from("leads").delete().like("first_name", "TestRLS%");
 
   // Find the platform_users for our fixtures so we can chain delete.
+  // Also delete any stray lead_events whose actor points at fixture rows
+  // (defends against orphans left by prior partial runs — the FK has no
+  // ON DELETE CASCADE).
   const { data: pus } = await sr
     .from("platform_users")
     .select("id")
     .in("email", ALL_FIXTURE_EMAILS);
   if (pus && pus.length > 0) {
     const puIds = pus.map((p) => p.id);
+    await sr.from("lead_events").delete().in("actor_platform_user_id", puIds);
     await sr.from("agents").delete().in("platform_user_id", puIds);
   }
   await sr.from("platform_users").delete().in("email", ALL_FIXTURE_EMAILS);
@@ -135,6 +155,7 @@ async function main() {
 
   console.log("--- setup: create auth.users via Admin API ---");
   await createAuthUser(SUPER_EMAIL);
+  await createAuthUser(SUPER2_EMAIL);
   await createAuthUser(ADMIN_EMAIL);
   await createAuthUser(AGENT_A_EMAIL);
   await createAuthUser(AGENT_B_EMAIL);
@@ -144,12 +165,13 @@ async function main() {
     .from("platform_users")
     .insert([
       { email: SUPER_EMAIL, role: "superadmin" },
+      { email: SUPER2_EMAIL, role: "superadmin" },
       { email: ADMIN_EMAIL, role: "admin" },
       { email: AGENT_A_EMAIL, role: "agent" },
       { email: AGENT_B_EMAIL, role: "agent" },
     ])
     .select();
-  if (puErr || !pus || pus.length !== 4) {
+  if (puErr || !pus || pus.length !== 5) {
     throw puErr ?? new Error("fixture: platform_users insert failed");
   }
   const puBy = (email: string) => pus.find((p) => p.email === email)!;
@@ -229,6 +251,48 @@ async function main() {
     },
   ]);
   if (lErr) throw lErr;
+
+  // Plan 5: also seed consent_log rows so the SELECT-policy tests have data.
+  // /api/leads writes these via insert_lead_with_consent atomically; for the
+  // test fixture we insert directly via service-role.
+  const { data: leadIds } = await sr
+    .from("leads")
+    .select("id, agent_id, first_name")
+    .like("first_name", "TestRLS%");
+  const leadByName = (n: string) =>
+    leadIds!.find((l) => l.first_name === n)!;
+  const a1Id = leadByName("TestRLS-A1").id;
+  const a2Id = leadByName("TestRLS-A2").id;
+  const b1Id = leadByName("TestRLS-B1").id;
+  await sr.from("consent_log").insert([
+    {
+      lead_id: a1Id,
+      brand: "northgate-protection",
+      consent_text: "TestRLS consent text A1",
+      form_version: "test",
+      ip_address: "127.0.0.1",
+      page_url: "https://test/leads",
+      user_agent: "test",
+    },
+    {
+      lead_id: a2Id,
+      brand: "northgate-protection",
+      consent_text: "TestRLS consent text A2",
+      form_version: "test",
+      ip_address: "127.0.0.1",
+      page_url: "https://test/leads",
+      user_agent: "test",
+    },
+    {
+      lead_id: b1Id,
+      brand: "northgate-protection",
+      consent_text: "TestRLS consent text B1",
+      form_version: "test",
+      ip_address: "127.0.0.1",
+      page_url: "https://test/leads",
+      user_agent: "test",
+    },
+  ]);
 
   // ---------------------------------------------------------------------------
   // Assertion 1: anon blocked on all three tables (no anon grants)
@@ -321,8 +385,8 @@ async function main() {
     .select("id")
     .in("email", ALL_FIXTURE_EMAILS);
   assert(
-    "admin: 4 platform_users rows (all fixtures)",
-    adminPus.error === null && adminPus.data?.length === 4,
+    "admin: 5 platform_users rows (all fixtures)",
+    adminPus.error === null && adminPus.data?.length === 5,
     adminPus.error ? adminPus.error.message : `got ${adminPus.data?.length} rows`,
   );
   const adminAgents = await adminClient
@@ -463,6 +527,405 @@ async function main() {
     badInsert.error
       ? `actual: ${badInsert.error.message}`
       : "expected a CHECK error",
+  );
+
+  // ===========================================================================
+  // Plan 5: RPC + SELECT-policy + anti-grant assertions (~15 new)
+  // ===========================================================================
+  // Re-create per-user clients here so we get fresh JWTs after the assertion-6
+  // active-flag flip. Existing aClient / bClient / adminClient / superClient
+  // were minted before the flip; safer to mint fresh.
+  const aClientRpc = await clientForUser(AGENT_A_EMAIL, TEST_PASSWORD);
+  const bClientRpc = await clientForUser(AGENT_B_EMAIL, TEST_PASSWORD);
+  const adminClientRpc = await clientForUser(ADMIN_EMAIL, TEST_PASSWORD);
+  const superClientRpc = await clientForUser(SUPER_EMAIL, TEST_PASSWORD);
+  const super2ClientRpc = await clientForUser(SUPER2_EMAIL, TEST_PASSWORD);
+
+  // ---------------------------------------------------------------------------
+  // Assertion 9: update_lead_status — agent on own lead → success
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 9: update_lead_status agent on own lead ---");
+  const u9 = await aClientRpc.rpc("update_lead_status", {
+    p_lead_id: a1Id,
+    p_new_status: "contacted",
+  });
+  assert(
+    "agent A: update_lead_status('contacted') on own lead → success",
+    u9.error === null,
+    u9.error ? `actual: ${u9.error.message}` : "",
+  );
+  // Verify the status persisted + a status_change event was written with actor.
+  const { data: a1AfterRow } = await sr
+    .from("leads")
+    .select("status")
+    .eq("id", a1Id)
+    .single();
+  assert(
+    "agent A's lead.status now = 'contacted'",
+    a1AfterRow?.status === "contacted",
+    `actual: ${a1AfterRow?.status}`,
+  );
+  const { data: a1Events } = await sr
+    .from("lead_events")
+    .select("event_type, event_data, actor_platform_user_id")
+    .eq("lead_id", a1Id)
+    .eq("event_type", "status_change");
+  assert(
+    "lead_events row written for status_change with actor_platform_user_id set",
+    !!a1Events &&
+      a1Events.length >= 1 &&
+      a1Events.some(
+        (e) => e.actor_platform_user_id === puBy(AGENT_A_EMAIL).id,
+      ),
+    `events: ${JSON.stringify(a1Events)}`,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 10: update_lead_status — agent on another agent's lead → denied
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 10: update_lead_status agent A on B's lead → denied ---");
+  const u10 = await aClientRpc.rpc("update_lead_status", {
+    p_lead_id: b1Id,
+    p_new_status: "contacted",
+  });
+  assert(
+    "agent A: update_lead_status on B's lead → access denied",
+    u10.error !== null && /access denied|not found/i.test(u10.error.message),
+    u10.error ? `actual: ${u10.error.message}` : "expected an error",
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 11: update_lead_status — admin on any lead → success
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 11: update_lead_status admin on B's lead → success ---");
+  const u11 = await adminClientRpc.rpc("update_lead_status", {
+    p_lead_id: b1Id,
+    p_new_status: "appointment",
+  });
+  assert(
+    "admin: update_lead_status on B's lead → success",
+    u11.error === null,
+    u11.error ? `actual: ${u11.error.message}` : "",
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 12: update_lead_notes — agent on own lead → success + event
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 12: update_lead_notes agent on own lead ---");
+  const u12 = await aClientRpc.rpc("update_lead_notes", {
+    p_lead_id: a1Id,
+    p_notes: "TestRLS: left voicemail at 2pm",
+  });
+  assert(
+    "agent A: update_lead_notes on own lead → success",
+    u12.error === null,
+    u12.error ? `actual: ${u12.error.message}` : "",
+  );
+  const { data: a1NotesRow } = await sr
+    .from("leads")
+    .select("notes")
+    .eq("id", a1Id)
+    .single();
+  assert(
+    "agent A's lead.notes persisted",
+    a1NotesRow?.notes === "TestRLS: left voicemail at 2pm",
+    `actual: ${a1NotesRow?.notes}`,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 13: assign_lead — admin → success + assigned event with actor
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 13: assign_lead admin → success ---");
+  // Find the unassigned lead.
+  const { data: unassignedRow } = await sr
+    .from("leads")
+    .select("id")
+    .eq("first_name", "TestRLS-Unassigned")
+    .single();
+  const unId = unassignedRow!.id;
+  const u13 = await adminClientRpc.rpc("assign_lead", {
+    p_lead_id: unId,
+    p_new_agent_id: agentB.id,
+  });
+  assert(
+    "admin: assign_lead(B) on unassigned → success",
+    u13.error === null,
+    u13.error ? `actual: ${u13.error.message}` : "",
+  );
+  const { data: unAfterRow } = await sr
+    .from("leads")
+    .select("agent_id")
+    .eq("id", unId)
+    .single();
+  assert(
+    "lead.agent_id updated to agent B",
+    unAfterRow?.agent_id === agentB.id,
+    `actual: ${unAfterRow?.agent_id}`,
+  );
+  const { data: unAssignedEvents } = await sr
+    .from("lead_events")
+    .select("event_type, actor_platform_user_id")
+    .eq("lead_id", unId)
+    .eq("event_type", "assigned");
+  assert(
+    "assigned event written with admin actor",
+    !!unAssignedEvents &&
+      unAssignedEvents.length === 1 &&
+      unAssignedEvents[0]?.actor_platform_user_id === puBy(ADMIN_EMAIL).id,
+    `events: ${JSON.stringify(unAssignedEvents)}`,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 14: assign_lead — agent → permission denied
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 14: assign_lead agent → permission denied ---");
+  const u14 = await aClientRpc.rpc("assign_lead", {
+    p_lead_id: a1Id,
+    p_new_agent_id: agentB.id,
+  });
+  assert(
+    "agent A: assign_lead → permission denied",
+    u14.error !== null &&
+      /admin or superadmin required|access denied/i.test(u14.error.message),
+    u14.error ? `actual: ${u14.error.message}` : "expected an error",
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 15: assign_lead — admin assigns to NULL → success
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 15: assign_lead to NULL (unassign) ---");
+  const u15 = await adminClientRpc.rpc("assign_lead", {
+    p_lead_id: unId,
+    p_new_agent_id: null,
+  });
+  assert(
+    "admin: assign_lead(NULL) → success (unassign)",
+    u15.error === null,
+    u15.error ? `actual: ${u15.error.message}` : "",
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 16: set_platform_user_active — admin deactivates agent B → success
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 16: set_platform_user_active admin deactivates agent ---");
+  const u16 = await adminClientRpc.rpc("set_platform_user_active", {
+    p_target_user_id: puBy(AGENT_B_EMAIL).id,
+    p_new_active: false,
+  });
+  assert(
+    "admin: set_platform_user_active(B, false) → success",
+    u16.error === null,
+    u16.error ? `actual: ${u16.error.message}` : "",
+  );
+  // Restore for the rest.
+  await sr
+    .from("platform_users")
+    .update({ active: true })
+    .eq("id", puBy(AGENT_B_EMAIL).id);
+
+  // ---------------------------------------------------------------------------
+  // Assertion 17: admin self-deactivation → 'cannot deactivate yourself'
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 17: admin self-deactivation refused ---");
+  const u17 = await adminClientRpc.rpc("set_platform_user_active", {
+    p_target_user_id: puBy(ADMIN_EMAIL).id,
+    p_new_active: false,
+  });
+  assert(
+    "admin self-deactivation → 'cannot deactivate yourself'",
+    u17.error !== null && /cannot deactivate yourself/i.test(u17.error.message),
+    u17.error ? `actual: ${u17.error.message}` : "expected an error",
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 18: admin deactivating superadmin → admin/superadmin divergence
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 18: admin cannot deactivate superadmin ---");
+  const u18 = await adminClientRpc.rpc("set_platform_user_active", {
+    p_target_user_id: puBy(SUPER_EMAIL).id,
+    p_new_active: false,
+  });
+  assert(
+    "admin → set_platform_user_active(superadmin) → 'admin cannot deactivate superadmin'",
+    u18.error !== null &&
+      /admin cannot deactivate superadmin/i.test(u18.error.message),
+    u18.error ? `actual: ${u18.error.message}` : "expected an error",
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 19: superadmin deactivates another superadmin → success (allowed)
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 19: superadmin can deactivate another superadmin ---");
+  const u19 = await superClientRpc.rpc("set_platform_user_active", {
+    p_target_user_id: puBy(SUPER2_EMAIL).id,
+    p_new_active: false,
+  });
+  assert(
+    "superadmin → set_platform_user_active(other superadmin, false) → success",
+    u19.error === null,
+    u19.error ? `actual: ${u19.error.message}` : "",
+  );
+  // Restore so SUPER2 can sign in for any later assertion (none today, but
+  // re-running the script needs SUPER2 active for cleanup symmetry).
+  await sr
+    .from("platform_users")
+    .update({ active: true })
+    .eq("id", puBy(SUPER2_EMAIL).id);
+
+  // ---------------------------------------------------------------------------
+  // Assertion 20: agent → set_platform_user_active → permission denied
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 20: agent → set_platform_user_active → denied ---");
+  const u20 = await aClientRpc.rpc("set_platform_user_active", {
+    p_target_user_id: puBy(AGENT_B_EMAIL).id,
+    p_new_active: false,
+  });
+  assert(
+    "agent A: set_platform_user_active → 'admin or superadmin required'",
+    u20.error !== null &&
+      /admin or superadmin required/i.test(u20.error.message),
+    u20.error ? `actual: ${u20.error.message}` : "expected an error",
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 21: update_agent_profile — agent on own row → success
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 21: update_agent_profile agent on own row ---");
+  const u21 = await aClientRpc.rpc("update_agent_profile", {
+    p_full_name: "TestRLS Agent A v2",
+    p_license_states: ["TX", "FL", "CA"],
+  });
+  assert(
+    "agent A: update_agent_profile → success",
+    u21.error === null,
+    u21.error ? `actual: ${u21.error.message}` : "",
+  );
+  const { data: agentARow } = await sr
+    .from("agents")
+    .select("full_name, license_states")
+    .eq("id", agentA.id)
+    .single();
+  assert(
+    "agents row updated: full_name + license_states",
+    agentARow?.full_name === "TestRLS Agent A v2" &&
+      Array.isArray(agentARow?.license_states) &&
+      agentARow!.license_states.length === 3,
+    `actual: ${JSON.stringify(agentARow)}`,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 22: update_agent_profile — admin (no agent row) → loud failure
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 22: update_agent_profile admin (no agent row) → denied ---");
+  const u22 = await adminClientRpc.rpc("update_agent_profile", {
+    p_full_name: "Should Not Work",
+    p_license_states: ["TX"],
+  });
+  assert(
+    "admin: update_agent_profile → 'no agent row for current user'",
+    u22.error !== null &&
+      /no agent row for current user/i.test(u22.error.message),
+    u22.error ? `actual: ${u22.error.message}` : "expected an error",
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 23: update_agent_profile — empty license_states → validation
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 23: update_agent_profile empty license_states → validation ---");
+  const u23 = await aClientRpc.rpc("update_agent_profile", {
+    p_full_name: "TestRLS Agent A v3",
+    p_license_states: [],
+  });
+  assert(
+    "agent A: update_agent_profile([]) → 'license_states must be non-empty'",
+    u23.error !== null && /non-empty/i.test(u23.error.message),
+    u23.error ? `actual: ${u23.error.message}` : "expected an error",
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 24-25: SELECT consent_log via role-aware policy
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 24: agent SELECT consent_log for own lead → returns row ---");
+  const cl24 = await aClientRpc
+    .from("consent_log")
+    .select("id, consent_text")
+    .eq("lead_id", a1Id);
+  assert(
+    "agent A: SELECT consent_log for own lead → 1 row",
+    cl24.error === null && cl24.data?.length === 1,
+    cl24.error
+      ? cl24.error.message
+      : `got ${cl24.data?.length} rows`,
+  );
+
+  console.log("\n--- Assertion 25: agent SELECT consent_log for B's lead → 0 rows ---");
+  const cl25 = await aClientRpc
+    .from("consent_log")
+    .select("id")
+    .eq("lead_id", b1Id);
+  assert(
+    "agent A: SELECT consent_log for B's lead → 0 rows (RLS hides)",
+    cl25.error === null && cl25.data?.length === 0,
+    cl25.error ? cl25.error.message : `got ${cl25.data?.length} rows`,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 26-27: SELECT lead_events via role-aware policy
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 26: agent SELECT lead_events for own lead → returns rows ---");
+  const le26 = await aClientRpc
+    .from("lead_events")
+    .select("id, event_type")
+    .eq("lead_id", a1Id);
+  assert(
+    "agent A: SELECT lead_events for own lead → at least 1 row (status_change)",
+    le26.error === null && (le26.data?.length ?? 0) >= 1,
+    le26.error ? le26.error.message : `got ${le26.data?.length} rows`,
+  );
+
+  console.log("\n--- Assertion 27: agent SELECT lead_events for B's lead → 0 rows ---");
+  const le27 = await aClientRpc
+    .from("lead_events")
+    .select("id")
+    .eq("lead_id", b1Id);
+  assert(
+    "agent A: SELECT lead_events for B's lead → 0 rows (RLS hides)",
+    le27.error === null && le27.data?.length === 0,
+    le27.error ? le27.error.message : `got ${le27.data?.length} rows`,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 28-29: anon blocked on consent_log + lead_events
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 28-29: anon SELECT consent_log + lead_events → permission denied ---");
+  for (const table of ["consent_log", "lead_events"] as const) {
+    const { error } = await anon.from(table).select("id").limit(1);
+    assert(
+      `anon SELECT on ${table} → permission denied`,
+      error !== null &&
+        /permission denied|not allowed|insufficient/i.test(error.message),
+      error ? `actual: ${error.message}` : "expected an error",
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Assertion 30: anti-grant — agent .from('leads').update(...) → denied
+  // ---------------------------------------------------------------------------
+  // The RPC pattern only works because authenticated has NO direct UPDATE
+  // grant on leads. Without this test, a future migration that accidentally
+  // grants UPDATE to authenticated would silently allow agents to bypass the
+  // RPCs (e.g., agent could craft .update({ on_dnc: true })).
+  // Defends Plan 5 Decision #13 (RPC-only-writes pattern).
+  console.log("\n--- Assertion 30: agent direct UPDATE on leads → permission denied ---");
+  const ag30 = await aClientRpc
+    .from("leads")
+    .update({ on_dnc: true })
+    .eq("id", a1Id);
+  assert(
+    "agent A: .from('leads').update({on_dnc}) → permission denied",
+    ag30.error !== null &&
+      /permission denied|not allowed|insufficient/i.test(ag30.error.message),
+    ag30.error ? `actual: ${ag30.error.message}` : "expected an error",
   );
 
   console.log("\n--- cleanup ---");

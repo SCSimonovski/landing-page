@@ -107,6 +107,7 @@ export type Database = {
       }
       lead_events: {
         Row: {
+          actor_platform_user_id: string | null
           created_at: string
           event_data: Json | null
           event_type: Database["public"]["Enums"]["lead_event_type"]
@@ -114,6 +115,7 @@ export type Database = {
           lead_id: string
         }
         Insert: {
+          actor_platform_user_id?: string | null
           created_at?: string
           event_data?: Json | null
           event_type: Database["public"]["Enums"]["lead_event_type"]
@@ -121,6 +123,7 @@ export type Database = {
           lead_id: string
         }
         Update: {
+          actor_platform_user_id?: string | null
           created_at?: string
           event_data?: Json | null
           event_type?: Database["public"]["Enums"]["lead_event_type"]
@@ -128,6 +131,13 @@ export type Database = {
           lead_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "lead_events_actor_platform_user_id_fkey"
+            columns: ["actor_platform_user_id"]
+            isOneToOne: false
+            referencedRelation: "platform_users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "lead_events_lead_id_fkey"
             columns: ["lead_id"]
@@ -297,6 +307,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      assign_lead: {
+        Args: { p_lead_id: string; p_new_agent_id: string }
+        Returns: undefined
+      }
       current_platform_user: {
         Args: never
         Returns: {
@@ -307,6 +321,25 @@ export type Database = {
         }[]
       }
       insert_lead_with_consent: { Args: { payload: Json }; Returns: string }
+      set_platform_user_active: {
+        Args: { p_new_active: boolean; p_target_user_id: string }
+        Returns: undefined
+      }
+      update_agent_profile: {
+        Args: { p_full_name: string; p_license_states: string[] }
+        Returns: undefined
+      }
+      update_lead_notes: {
+        Args: { p_lead_id: string; p_notes: string }
+        Returns: undefined
+      }
+      update_lead_status: {
+        Args: {
+          p_lead_id: string
+          p_new_status: Database["public"]["Enums"]["lead_status"]
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       lead_event_type:
@@ -321,6 +354,7 @@ export type Database = {
         | "sms_skipped_dnc"
         | "sms_skipped_suppression"
         | "email_skipped_suppression"
+        | "assigned"
       lead_status:
         | "new"
         | "contacted"
@@ -469,6 +503,7 @@ export const Constants = {
         "sms_skipped_dnc",
         "sms_skipped_suppression",
         "email_skipped_suppression",
+        "assigned",
       ],
       lead_status: [
         "new",
