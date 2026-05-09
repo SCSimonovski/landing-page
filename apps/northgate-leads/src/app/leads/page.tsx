@@ -65,10 +65,27 @@ export default async function LeadsPage({
   })();
   const errorMsg = errorKey ? LEADS_ERROR_MESSAGES[errorKey] : null;
 
+  // Compact projection of leads for the BulkActionBar — only the fields
+  // it needs to compute the modal's diff (status + agent_id per id).
+  const leadsForBulk = (
+    leads as unknown as
+      | Array<{ id: string; status: string; agent_id: string | null }>
+      | null
+      | undefined
+  )?.map((l) => ({
+    id: l.id,
+    status: l.status as Parameters<typeof BulkActionBar>[0]["leads"][number]["status"],
+    agent_id: l.agent_id,
+  })) ?? [];
+
   return (
     <LeadSelectionProvider>
       {isAdmin && (
-        <BulkActionBar isAdmin={isAdmin} agents={agentsForFilter ?? []} />
+        <BulkActionBar
+          isAdmin={isAdmin}
+          agents={agentsForFilter ?? []}
+          leads={leadsForBulk}
+        />
       )}
       {errorMsg && (
         <div className="border-b bg-destructive/5 px-6 py-3">

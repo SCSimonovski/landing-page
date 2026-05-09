@@ -108,6 +108,7 @@ export type Database = {
       lead_events: {
         Row: {
           actor_platform_user_id: string | null
+          bulk_operation_id: string | null
           created_at: string
           event_data: Json | null
           event_type: Database["public"]["Enums"]["lead_event_type"]
@@ -116,6 +117,7 @@ export type Database = {
         }
         Insert: {
           actor_platform_user_id?: string | null
+          bulk_operation_id?: string | null
           created_at?: string
           event_data?: Json | null
           event_type: Database["public"]["Enums"]["lead_event_type"]
@@ -124,6 +126,7 @@ export type Database = {
         }
         Update: {
           actor_platform_user_id?: string | null
+          bulk_operation_id?: string | null
           created_at?: string
           event_data?: Json | null
           event_type?: Database["public"]["Enums"]["lead_event_type"]

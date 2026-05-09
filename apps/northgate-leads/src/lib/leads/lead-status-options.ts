@@ -50,3 +50,34 @@ export const LEAD_STATUS_BADGE_CLASS: Record<LeadStatus, string> = {
 export function isLeadStatus(value: string): value is LeadStatus {
   return (LEAD_STATUS_VALUES as readonly string[]).includes(value);
 }
+
+// Funnel ordering for the regression-warning UI on the bulk-status modal.
+// Forward moves (e.g., contacted → appointment) are normal progress;
+// backward moves (e.g., appointment → contacted) are regressions worth
+// flagging. Terminal states (`dead`, `refunded`) are reachable from
+// anywhere and don't have an ordinal — moving INTO them is fine; moving
+// OUT of them isn't a "regression" per se but is unusual.
+//
+// Lower index = earlier in funnel. Terminal states get rank null.
+const FUNNEL_RANK: Record<LeadStatus, number | null> = {
+  new: 0,
+  contacted: 1,
+  appointment: 2,
+  sold: 3,
+  dead: null,
+  refunded: null,
+};
+
+// True when changing from `current` to `next` would move a lead BACKWARD
+// in the sales funnel. Used in the bulk modal to flag regressions
+// distinctly. Terminal-state transitions (anything involving `dead` or
+// `refunded`) return false — those are intentional out-of-funnel moves.
+export function isStatusRegression(
+  current: LeadStatus,
+  next: LeadStatus,
+): boolean {
+  const cur = FUNNEL_RANK[current];
+  const nxt = FUNNEL_RANK[next];
+  if (cur === null || nxt === null) return false;
+  return nxt < cur;
+}

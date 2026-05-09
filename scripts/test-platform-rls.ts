@@ -967,19 +967,19 @@ async function main() {
   );
   const { data: bulkAssignedEvents } = await sr
     .from("lead_events")
-    .select("lead_id, event_type, event_data, actor_platform_user_id")
+    .select("lead_id, event_type, actor_platform_user_id, bulk_operation_id")
     .in("lead_id", [a1Id, a2Id])
     .eq("event_type", "assigned")
     .order("created_at", { ascending: false })
     .limit(2);
   assert(
-    "two 'assigned' events written with admin actor + bulk=true",
+    "two 'assigned' events written with admin actor + non-null bulk_operation_id",
     !!bulkAssignedEvents &&
       bulkAssignedEvents.length === 2 &&
       bulkAssignedEvents.every(
         (e) =>
           e.actor_platform_user_id === puBy(ADMIN_EMAIL).id &&
-          (e.event_data as { bulk?: boolean })?.bulk === true,
+          e.bulk_operation_id !== null,
       ),
     `events: ${JSON.stringify(bulkAssignedEvents)}`,
   );
@@ -1058,6 +1058,99 @@ async function main() {
     "atomic revert: a1.status unchanged after failed bulk",
     preMap.get(a1Id) === postMap.get(a1Id),
     `pre: ${preMap.get(a1Id)} post: ${postMap.get(a1Id)}`,
+  );
+
+  // ===========================================================================
+  // Plan 5+ safety layer: bulk_operation_id grouping + 100-row cap
+  // ===========================================================================
+
+  // ---------------------------------------------------------------------------
+  // Assertion 35: bulk RPC events all share one bulk_operation_id
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 35: bulk_assign_leads events share bulk_operation_id ---");
+  // Reset assignments first to ensure both leads will write events.
+  await sr.from("leads").update({ agent_id: null }).in("id", [a1Id, a2Id]);
+  const u35 = await adminClientRpc.rpc("bulk_assign_leads", {
+    p_lead_ids: [a1Id, a2Id],
+    p_new_agent_id: agentA.id,
+  } as never);
+  assert(
+    "bulk_assign_leads([a1, a2] → A) → success",
+    u35.error === null,
+    u35.error ? `actual: ${u35.error.message}` : "",
+  );
+  const { data: opEvents } = await sr
+    .from("lead_events")
+    .select("lead_id, bulk_operation_id")
+    .in("lead_id", [a1Id, a2Id])
+    .eq("event_type", "assigned")
+    .order("created_at", { ascending: false })
+    .limit(2);
+  const uniqueOpIds = new Set(
+    (opEvents ?? []).map((e) => e.bulk_operation_id),
+  );
+  assert(
+    "two events both have non-null bulk_operation_id, same value",
+    !!opEvents &&
+      opEvents.length === 2 &&
+      uniqueOpIds.size === 1 &&
+      !uniqueOpIds.has(null),
+    `events: ${JSON.stringify(opEvents)}`,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 36: per-row RPC writes leave bulk_operation_id NULL
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 36: per-row update_lead_status leaves bulk_operation_id NULL ---");
+  const u36 = await aClientRpc.rpc("update_lead_status", {
+    p_lead_id: a1Id,
+    p_new_status: "sold",
+  } as never);
+  assert(
+    "update_lead_status (per-row) → success",
+    u36.error === null,
+    u36.error ? `actual: ${u36.error.message}` : "",
+  );
+  const { data: perRowEvent } = await sr
+    .from("lead_events")
+    .select("bulk_operation_id, event_type")
+    .eq("lead_id", a1Id)
+    .eq("event_type", "status_change")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  assert(
+    "per-row status_change event has bulk_operation_id = NULL",
+    !!perRowEvent &&
+      perRowEvent.length === 1 &&
+      perRowEvent[0].bulk_operation_id === null,
+    `event: ${JSON.stringify(perRowEvent)}`,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 37: 100-row hard cap fires
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 37: bulk RPC cap rejects > 100 ids ---");
+  // 101 fake UUIDs — RPC should reject before ever looking up rows.
+  const tooMany = Array.from({ length: 101 }, () =>
+    crypto.randomUUID(),
+  );
+  const u37 = await adminClientRpc.rpc("bulk_assign_leads", {
+    p_lead_ids: tooMany,
+    p_new_agent_id: agentA.id,
+  } as never);
+  assert(
+    "bulk_assign_leads with 101 ids → 'limited to 100 leads'",
+    u37.error !== null && /limited to 100 leads/i.test(u37.error.message),
+    u37.error ? `actual: ${u37.error.message}` : "expected an error",
+  );
+  const u37b = await adminClientRpc.rpc("bulk_update_lead_status", {
+    p_lead_ids: tooMany,
+    p_new_status: "contacted",
+  } as never);
+  assert(
+    "bulk_update_lead_status with 101 ids → 'limited to 100 leads'",
+    u37b.error !== null && /limited to 100 leads/i.test(u37b.error.message),
+    u37b.error ? `actual: ${u37b.error.message}` : "expected an error",
   );
 
   console.log("\n--- cleanup ---");

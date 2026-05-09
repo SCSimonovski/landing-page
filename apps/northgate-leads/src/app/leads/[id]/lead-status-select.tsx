@@ -58,14 +58,17 @@ export function LeadStatusSelect({
     startTransition(() => router.refresh());
   }
 
+  // <SelectValue> stays a leaf (sr-only here so Radix can keep its
+  // accessibility contract); we render the visible badge ourselves inside
+  // the trigger. React 19 throws "Cannot use a ref ... if that element
+  // also sets children" when you put custom children inside SelectValue.
   return (
     <Select value={optimistic} onValueChange={handleChange} disabled={pending}>
       <SelectTrigger className="w-[180px]">
-        <SelectValue>
-          <Badge className={cn(LEAD_STATUS_BADGE_CLASS[optimistic])}>
-            {LEAD_STATUS_LABEL[optimistic]}
-          </Badge>
-        </SelectValue>
+        <Badge className={cn(LEAD_STATUS_BADGE_CLASS[optimistic])}>
+          {LEAD_STATUS_LABEL[optimistic]}
+        </Badge>
+        <SelectValue className="sr-only" />
       </SelectTrigger>
       <SelectContent>
         {LEAD_STATUS_VALUES.map((s) => (

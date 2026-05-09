@@ -4,6 +4,38 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-05-09 — Plan 5+ safety layer: bulk_operation_id + 100-row cap + confirm modal
+
+Same `v03-platform` branch — picked up architect feedback on the bulk RPCs (Claude Web review). Three architectural concerns addressed; one strategic decision (RPC stays dumb, modal carries safety logic).
+
+**Migration** (`20260509192618_bulk_operation_id_and_cap.sql`):
+- `lead_events.bulk_operation_id` (nullable uuid). NULL for individual RPC writes (Plan 5's per-row pattern) and for `insert_lead_with_consent`'s system events; populated by both bulk RPCs going forward — every event from one bulk call shares the same UUID. **Backfill is impossible** (the grouping doesn't exist after the fact), so the column had to be added before any future caller would have wanted it.
+- `CREATE OR REPLACE` on both bulk RPCs (`bulk_assign_leads`, `bulk_update_lead_status`) to: (a) generate a fresh `gen_random_uuid()` per call, (b) stamp it on every `lead_events` insert in that call, (c) reject arrays over **100 leads** with `'bulk operations limited to 100 leads (got N)'` (errcode `22023`). The cap guards against the lock-holding scenario where a 500-lead bulk would queue concurrent `/api/leads` writers.
+- Same RPC signatures as the prior migration (`(uuid[], uuid)` / `(uuid[], lead_status)`). **No `mode` parameter.** Architect call: the per-row no-op short-circuit already handles "skip rows where current === target"; mode would have been functionally informational. Modal carries all caller-side safety logic.
+- Replaces the legacy `event_data.bulk = true` field — superseded by the dedicated column. `event_data` for bulk events now matches per-row events (just `{old, new}` for status_change, `{old_agent_id, new_agent_id}` for assigned).
+
+**`<BulkConfirmDialog>`** — alert-style modal, two shapes:
+- **Status mode** (triggered when any selected lead has `status !== target`): breakdown per current status; distinct red warning when any selected lead would move *backward* in the sales funnel (`new < contacted < appointment < sold`; terminals `dead` / `refunded` reachable from anywhere — funnel ranks live as a frontend constant in `lib/leads/lead-status-options.ts`, RPC stays dumb). Two buttons when regressions present: **primary** "Apply to N (skip downgrades)" + **secondary** "Apply to all (incl. K downgrades)". Single primary button when no regressions.
+- **Assign mode** (triggered when any selected lead has `agent_id IS NOT NULL` and `agent_id !== target`): breakdown per current agent. Single primary button "Reassign all N" — no skip-mode needed per architect call (assign-overwrite is the actual intent of bulk-assign; the modal's job is showing the cross-agent diff so the operator confirms knowingly).
+
+**Heterogeneity branching in `<BulkActionBar>`:**
+- Pick "Assign to Bob": all selected unassigned → submit immediately (fresh assignment, no overwrite). Mix includes already-assigned-to-others → modal opens.
+- Pick "Set Contacted": all selected already in target → toast "no-op" with no action. Anything else → modal opens.
+- Submitting via modal sends only the IDs the chosen button corresponds to (safe-only vs all). The RPC's no-op short-circuit further filters; the result is the same DB state regardless of which button you pick when there are no regressions.
+
+**Verification** (`scripts/test-platform-rls.ts`): now **62 assertions** (~50s runtime). Three new assertions:
+- Two `assigned` events from one `bulk_assign_leads` call share a non-null `bulk_operation_id` (same UUID across both rows)
+- Per-row `update_lead_status` (Plan 5 RPC) leaves `bulk_operation_id = NULL` (proves the column distinguishes bulk vs per-row writes)
+- 101-id arrays to either bulk RPC raise `'bulk operations limited to 100 leads'`
+
+Updated the existing Assertion #31 to check `bulk_operation_id !== NULL` instead of the legacy `event_data.bulk` field.
+
+**vitest unchanged** (10 files / 192 tests). NP + Heritage lint unchanged (1 pre-existing RHF warning each).
+
+**Architect's separation principle locked in:** RPC validates auth + cap + atomic per-row apply with bulk_operation_id stamp; that's it. Modal owns all UX safety — heterogeneity detection, regression warning, default vs override. Lets the safety logic evolve (different funnel ordering, additional warnings) without schema migrations.
+
+---
+
 ## 2026-05-09 — Plan 5+ polish: bulk lead operations (assign + status change)
 
 Same `v03-platform` branch — picked up the user's feedback after Plan 5 smoke ("assigning leads one by one is tedious"). Mirrors Plan 5's RPC-only-writes pattern for bulk operations.
