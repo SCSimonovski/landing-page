@@ -928,6 +928,138 @@ async function main() {
     ag30.error ? `actual: ${ag30.error.message}` : "expected an error",
   );
 
+  // ===========================================================================
+  // Plan 5+: bulk RPCs (bulk_assign_leads, bulk_update_lead_status)
+  // ===========================================================================
+
+  // ---------------------------------------------------------------------------
+  // Assertion 31: bulk_assign_leads — admin assigns 2 leads to agent A
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 31: bulk_assign_leads admin → success ---");
+  const u31 = await adminClientRpc.rpc("bulk_assign_leads", {
+    p_lead_ids: [a1Id, a2Id],
+    p_new_agent_id: agentA.id,
+  } as never);
+  assert(
+    "admin: bulk_assign_leads([a1, a2] → A) → success (no-op for already-assigned)",
+    u31.error === null,
+    u31.error ? `actual: ${u31.error.message}` : "",
+  );
+  // Bulk-reassign to B (real change), then verify agent_id + per-lead events.
+  const u31b = await adminClientRpc.rpc("bulk_assign_leads", {
+    p_lead_ids: [a1Id, a2Id],
+    p_new_agent_id: agentB.id,
+  } as never);
+  assert(
+    "admin: bulk_assign_leads([a1, a2] → B) → success",
+    u31b.error === null,
+    u31b.error ? `actual: ${u31b.error.message}` : "",
+  );
+  const { data: bulkAssignedRows } = await sr
+    .from("leads")
+    .select("id, agent_id")
+    .in("id", [a1Id, a2Id]);
+  assert(
+    "both leads now assigned to B",
+    !!bulkAssignedRows &&
+      bulkAssignedRows.every((r) => r.agent_id === agentB.id),
+    `rows: ${JSON.stringify(bulkAssignedRows)}`,
+  );
+  const { data: bulkAssignedEvents } = await sr
+    .from("lead_events")
+    .select("lead_id, event_type, event_data, actor_platform_user_id")
+    .in("lead_id", [a1Id, a2Id])
+    .eq("event_type", "assigned")
+    .order("created_at", { ascending: false })
+    .limit(2);
+  assert(
+    "two 'assigned' events written with admin actor + bulk=true",
+    !!bulkAssignedEvents &&
+      bulkAssignedEvents.length === 2 &&
+      bulkAssignedEvents.every(
+        (e) =>
+          e.actor_platform_user_id === puBy(ADMIN_EMAIL).id &&
+          (e.event_data as { bulk?: boolean })?.bulk === true,
+      ),
+    `events: ${JSON.stringify(bulkAssignedEvents)}`,
+  );
+  // Restore so subsequent assertions / cleanup don't get confused.
+  await sr
+    .from("leads")
+    .update({ agent_id: agentA.id })
+    .in("id", [a1Id, a2Id]);
+
+  // ---------------------------------------------------------------------------
+  // Assertion 32: bulk_assign_leads — agent → permission denied
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 32: bulk_assign_leads agent → denied ---");
+  const u32 = await aClientRpc.rpc("bulk_assign_leads", {
+    p_lead_ids: [a1Id],
+    p_new_agent_id: agentB.id,
+  } as never);
+  assert(
+    "agent A: bulk_assign_leads → 'admin or superadmin required'",
+    u32.error !== null &&
+      /admin or superadmin required/i.test(u32.error.message),
+    u32.error ? `actual: ${u32.error.message}` : "expected an error",
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 33: bulk_update_lead_status — agent on own leads → success
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 33: bulk_update_lead_status agent on own leads → success ---");
+  const u33 = await aClientRpc.rpc("bulk_update_lead_status", {
+    p_lead_ids: [a1Id, a2Id],
+    p_new_status: "appointment",
+  } as never);
+  assert(
+    "agent A: bulk_update_lead_status([own]) → success",
+    u33.error === null,
+    u33.error ? `actual: ${u33.error.message}` : "",
+  );
+  const { data: bulkStatusRows } = await sr
+    .from("leads")
+    .select("id, status")
+    .in("id", [a1Id, a2Id]);
+  assert(
+    "both leads now status=appointment",
+    !!bulkStatusRows &&
+      bulkStatusRows.every((r) => r.status === "appointment"),
+    `rows: ${JSON.stringify(bulkStatusRows)}`,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 34: atomicity — agent batch including foreign lead → whole reverts
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 34: bulk_update_lead_status agent including B's lead → atomic revert ---");
+  // Capture pre-state.
+  const { data: preRows } = await sr
+    .from("leads")
+    .select("id, status")
+    .in("id", [a1Id, b1Id]);
+  const preMap = new Map((preRows ?? []).map((r) => [r.id, r.status]));
+  const u34 = await aClientRpc.rpc("bulk_update_lead_status", {
+    p_lead_ids: [a1Id, b1Id], // a1 is own, b1 is foreign
+    p_new_status: "sold",
+  } as never);
+  assert(
+    "agent A: bulk_update_lead_status([own, foreign]) → access denied",
+    u34.error !== null &&
+      /access denied/i.test(u34.error.message),
+    u34.error ? `actual: ${u34.error.message}` : "expected an error",
+  );
+  // Verify a1 was NOT updated (atomic revert).
+  const { data: postRows } = await sr
+    .from("leads")
+    .select("id, status")
+    .in("id", [a1Id, b1Id]);
+  const postMap = new Map((postRows ?? []).map((r) => [r.id, r.status]));
+  assert(
+    "atomic revert: a1.status unchanged after failed bulk",
+    preMap.get(a1Id) === postMap.get(a1Id),
+    `pre: ${preMap.get(a1Id)} post: ${postMap.get(a1Id)}`,
+  );
+
   console.log("\n--- cleanup ---");
   await cleanup();
   console.log("  done");

@@ -311,6 +311,17 @@ export type Database = {
         Args: { p_lead_id: string; p_new_agent_id: string }
         Returns: undefined
       }
+      bulk_assign_leads: {
+        Args: { p_lead_ids: string[]; p_new_agent_id: string }
+        Returns: undefined
+      }
+      bulk_update_lead_status: {
+        Args: {
+          p_lead_ids: string[]
+          p_new_status: Database["public"]["Enums"]["lead_status"]
+        }
+        Returns: undefined
+      }
       current_platform_user: {
         Args: never
         Returns: {

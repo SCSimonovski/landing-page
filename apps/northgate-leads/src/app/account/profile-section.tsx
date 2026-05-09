@@ -14,6 +14,14 @@ import { LicenseStatesPicker } from "@/components/license-states-picker";
 // AND the RPC raises 'no agent row for current user' if they call it (loud
 // failure, defense-in-depth).
 
+// Set-equality for the license_states array. Order can drift as the user
+// unchecks/rechecks, so a positional compare would be wrong.
+function sameStates(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const set = new Set(a);
+  return b.every((s) => set.has(s));
+}
+
 export function ProfileSection({
   initialFullName,
   initialLicenseStates,
@@ -28,6 +36,10 @@ export function ProfileSection({
   const [submitting, setSubmitting] = useState(false);
   const [, startTransition] = useTransition();
   const router = useRouter();
+
+  const dirty =
+    fullName.trim() !== initialFullName.trim() ||
+    !sameStates(licenseStates, initialLicenseStates);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -78,7 +90,7 @@ export function ProfileSection({
           disabled={submitting}
         />
       </div>
-      <Button type="submit" disabled={submitting}>
+      <Button type="submit" disabled={submitting || !dirty}>
         {submitting ? "Saving…" : "Save profile"}
       </Button>
     </form>

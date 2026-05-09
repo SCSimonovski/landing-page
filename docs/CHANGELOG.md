@@ -4,6 +4,38 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-05-09 — Plan 5+ polish: bulk lead operations (assign + status change)
+
+Same `v03-platform` branch — picked up the user's feedback after Plan 5 smoke ("assigning leads one by one is tedious"). Mirrors Plan 5's RPC-only-writes pattern for bulk operations.
+
+**Migration** (`20260509030752_bulk_lead_rpcs.sql`):
+- `bulk_assign_leads(p_lead_ids uuid[], p_new_agent_id uuid)` — admin/superadmin only. Atomic transaction (all-or-nothing). Per-lead no-op short-circuit. Per-lead `assigned` event with actor + `event_data.bulk = true`. NULL agent_id allowed (= unassign).
+- `bulk_update_lead_status(p_lead_ids uuid[], p_new_status lead_status)` — agent on own leads OR admin/superadmin. **Atomicity guarantee:** an agent passing a batch that includes a foreign lead → whole batch reverts (verified). Per-lead no-op short-circuit. Per-lead `status_change` event with actor + `bulk = true`.
+
+Both EXECUTE granted to `authenticated`. No new direct UPDATE grants on `leads` — extends Plan 5 Decision #13 (RPC-only-writes pattern).
+
+**UI** (admin/superadmin only):
+- **Checkbox column** at the leftmost position of `/leads` table — agents don't see it (matches RPC's admin-only constraint for bulk_assign + keeps the agent UI uncluttered).
+- **Header checkbox** = select-all-visible-on-this-page (cross-page selection deferred). Three states: checked / indeterminate / unchecked.
+- **Sticky `<BulkActionBar>`** at top of the page when selection is non-empty. Shows `N leads selected` + `Assign to ▼` + `Set status ▼` + `Clear`. Each action calls its bulk RPC. Toast on success, refresh + clear selection. Designed so future actions (Mark DNC, bulk delete) drop in as more buttons.
+- **Selection state** lives in a `<LeadSelectionProvider>` client context wrapping the page (NOT in URL — selection is ephemeral; persisting across navigations is its own UX problem).
+- Row checkbox click stops propagation so it doesn't trigger the row's click-to-detail navigation.
+
+**Verification:** `scripts/test-platform-rls.ts` extended from 47 → **56 assertions** (~45s runtime). Four new bulk-RPC assertions:
+- bulk_assign_leads: admin succeeds + writes per-lead `assigned` events with bulk=true; agent → permission denied
+- bulk_update_lead_status: agent on own leads succeeds; agent on mixed (own + foreign) batch → atomic revert (verified pre/post state)
+
+vitest unchanged (10 files / 192 tests — bulk RPCs are integration-tested via the script).
+
+**Defer / OOB:**
+- Bulk delete — TCPA-adjacent (consent_log is append-only per AGENTS.md § 6; `lead_events` + `consent_log` FK chain has no CASCADE). Worth its own plan covering soft-delete-via-`deleted_at`-column vs hard-delete-with-explicit-child-cleanup.
+- Cross-page selection persistence — header checkbox currently scopes to visible page only. Adding "select all 247 matching leads" UX needs a different selection model (filter-based vs id-based) and a confirmation hint.
+- Bulk Mark DNC — admin-only action sketched in user's mental model; defer to a small plan once the immediate pain is gone.
+
+NP + Heritage runtime byte-identical (no consumer-app changes).
+
+---
+
 ## 2026-05-09 — Plan 5: Northgate Leads v0.3 (lead detail + status + assignment + notes + /account + RPC-only-writes)
 
 Plan 5 per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. Closes the three operator gaps Plan 4's smoke surfaced: no in-app lead assignment (was SQL-only), no agent status updates (`leads.status` enum sat unused), no profile / password change UI. Architectural lock-in: **all row-scoped writes from `authenticated` flow through SECURITY DEFINER RPCs**, NOT direct UPDATE grants — Plan 5 is where the RPC-only-writes pattern gets written into the codebase as the convention.

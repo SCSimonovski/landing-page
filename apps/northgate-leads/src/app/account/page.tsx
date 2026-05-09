@@ -62,20 +62,18 @@ export default async function AccountPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Email</CardTitle>
+            <CardTitle className="text-base">Sign-in info</CardTitle>
             <CardDescription>
               Read-only. Contact your administrator to change your email.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div>
-              <p className="text-muted-foreground text-xs">Email</p>
-              <p className="font-mono">{email}</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-xs">Role</p>
+          <CardContent className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
+            <span className="text-muted-foreground">Email</span>
+            <span className="font-mono">{email}</span>
+            <span className="text-muted-foreground">Role</span>
+            <span>
               <Badge variant="outline">{platformUser.role}</Badge>
-            </div>
+            </span>
           </CardContent>
         </Card>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { US_STATES } from "@platform/shared/validation/common";
+import { US_STATES, US_STATE_NAMES } from "@platform/shared/validation/common";
 import { Checkbox } from "@/components/ui/checkbox";
 
 // Reusable 50-state checkbox grid. Used by:
@@ -21,13 +21,13 @@ export function LicenseStatesPicker({
   disabled?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-6 gap-2 rounded-md border p-3 max-h-48 overflow-y-auto">
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 rounded-md border p-3 max-h-72 overflow-y-auto">
       {US_STATES.map((s) => {
         const selected = value.includes(s);
         return (
           <label
             key={s}
-            className="flex items-center gap-1.5 text-xs cursor-pointer"
+            className="flex items-center gap-2 text-sm cursor-pointer"
           >
             <Checkbox
               checked={selected}
@@ -40,7 +40,10 @@ export function LicenseStatesPicker({
                 }
               }}
             />
-            <span className="font-mono">{s}</span>
+            <span className="font-mono text-xs text-muted-foreground w-6">
+              {s}
+            </span>
+            <span className="truncate">{US_STATE_NAMES[s]}</span>
           </label>
         );
       })}

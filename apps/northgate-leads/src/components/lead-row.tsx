@@ -16,6 +16,7 @@ import {
   type LeadStatus,
 } from "@/lib/leads/lead-status-options";
 import { cn } from "@/lib/utils";
+import { LeadRowCheckbox } from "@/components/lead-row-checkbox";
 
 // Per-row client wrapper. Owns the click-to-detail navigation so the
 // parent LeadTable stays a Server Component. Plan 5 Decision #22:
@@ -120,6 +121,7 @@ export function LeadRow({
       onClick={() => router.push(`/leads/${lead.id}`)}
       className="cursor-pointer"
     >
+      {isAdmin && <LeadRowCheckbox leadId={lead.id} />}
       <TableCell className="whitespace-nowrap text-muted-foreground">
         {formatCreated(lead.created_at)}
       </TableCell>

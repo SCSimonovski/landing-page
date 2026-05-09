@@ -5,6 +5,8 @@ import { buildLeadsQuery, parseFilters } from "@/lib/leads-query";
 import { LeadTable } from "@/components/lead-table";
 import { FilterBar } from "@/components/filter-bar";
 import { Pagination } from "@/components/pagination";
+import { LeadSelectionProvider } from "@/components/lead-selection-provider";
+import { BulkActionBar } from "@/components/bulk-action-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +66,10 @@ export default async function LeadsPage({
   const errorMsg = errorKey ? LEADS_ERROR_MESSAGES[errorKey] : null;
 
   return (
-    <>
+    <LeadSelectionProvider>
+      {isAdmin && (
+        <BulkActionBar isAdmin={isAdmin} agents={agentsForFilter ?? []} />
+      )}
       {errorMsg && (
         <div className="border-b bg-destructive/5 px-6 py-3">
           <div className="mx-auto max-w-7xl">
@@ -95,6 +100,6 @@ export default async function LeadsPage({
           total={count ?? 0}
         />
       </div>
-    </>
+    </LeadSelectionProvider>
   );
 }

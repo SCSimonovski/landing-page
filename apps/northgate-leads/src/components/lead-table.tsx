@@ -17,6 +17,7 @@ import {
 } from "@/lib/url-params";
 import { cn } from "@/lib/utils";
 import { LeadRow } from "@/components/lead-row";
+import { LeadHeaderCheckbox } from "@/components/lead-header-checkbox";
 import type { LeadStatus } from "@/lib/leads/lead-status-options";
 
 // Server Component. Renders the table chrome (headers + sortable links +
@@ -124,12 +125,14 @@ export function LeadTable({
 
   const sortCol = getSingle(searchParams, "sort");
   const sortDir = getSingle(searchParams, "dir");
+  const visibleIds = leads.map((l) => l.id);
 
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
+            {isAdmin && <LeadHeaderCheckbox visibleIds={visibleIds} />}
             <SortHead column="created_at" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Created</SortHead>
             <TableHead>Brand</TableHead>
             <TableHead>Product</TableHead>
