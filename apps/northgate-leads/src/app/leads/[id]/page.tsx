@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronLeftIcon } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getPlatformUser } from "@/lib/auth/get-platform-user";
+import { displayName } from "@/lib/auth/display-name";
 import {
   Card,
   CardContent,
@@ -35,10 +36,10 @@ export const dynamic = "force-dynamic";
 // can't see this lead, the SELECT returns null and we 404. Same posture
 // for consent_log + lead_events (role-aware policies from Plan 5).
 //
-// Activity timeline actor join: Supabase nested-select returns a single
-// object when there's a unique constraint detected (agents.platform_user_id
-// is UNIQUE per Plan 3 migration), but we normalize defensively in case
-// the response shape varies (Plan 5 Decision #24).
+// Activity timeline actor join: pulls full_name + email straight from
+// platform_users (canonical source of truth for display name post-Plan-5b).
+// Supabase usually returns a single object for one-to-one nested selects
+// but we normalize defensively in case the response shape varies.
 
 type AgentNested = { id: string; full_name: string } | null;
 type LeadRow = {
@@ -73,10 +74,9 @@ type ConsentRow = {
   created_at: string;
 };
 
-type ActorAgent = { full_name: string } | null;
 type ActorRow = {
   email: string;
-  agents: ActorAgent | ActorAgent[];
+  full_name: string | null;
 } | null;
 type EventRow = {
   id: string;
@@ -96,8 +96,7 @@ function actorLabel(ev: EventRow): string {
   if (!ev.actor_platform_user_id) return "system";
   const actor = unwrapNested(ev.actor);
   if (!actor) return "(deleted user)";
-  const agent = unwrapNested(actor.agents);
-  return agent?.full_name ?? actor.email;
+  return displayName({ full_name: actor.full_name, email: actor.email });
 }
 
 function eventCopy(ev: EventRow): string {
@@ -227,7 +226,7 @@ export default async function LeadDetailPage({
   const { data: eventsRaw } = await supabase
     .from("lead_events")
     .select(
-      "*, actor:platform_users!actor_platform_user_id(email, agents(full_name))",
+      "*, actor:platform_users!actor_platform_user_id(email, full_name)",
     )
     .eq("lead_id", id)
     .order("created_at", { ascending: false });
@@ -434,10 +433,9 @@ export default async function LeadDetailPage({
 function StatusChangeLine({ ev }: { ev: EventRow }) {
   const actor = (() => {
     if (!ev.actor_platform_user_id) return "system";
-    const actor = Array.isArray(ev.actor) ? ev.actor[0] : ev.actor;
-    if (!actor) return "(deleted user)";
-    const agent = Array.isArray(actor.agents) ? actor.agents[0] : actor.agents;
-    return agent?.full_name ?? actor.email;
+    const a = Array.isArray(ev.actor) ? ev.actor[0] : ev.actor;
+    if (!a) return "(deleted user)";
+    return displayName({ full_name: a.full_name, email: a.email });
   })();
   const data = (ev.event_data ?? {}) as { old?: string; new?: string };
   const oldS = data.old as LeadStatus | undefined;

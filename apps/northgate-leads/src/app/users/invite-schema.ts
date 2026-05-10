@@ -19,20 +19,16 @@ export const inviteSchema = z
       .toLowerCase()
       .email("Please enter a valid email."),
     role: z.enum(ROLES, "Pick a role."),
-    full_name: z.string().trim().min(1).optional(),
+    // Required for every role. full_name lands on platform_users (canonical
+    // source of truth) for all users; agents additionally get a license_states
+    // array via the agents row (checked in superRefine).
+    full_name: z.string().trim().min(1, "Full name is required."),
     license_states: z
       .array(z.enum(stateValues))
       .optional(),
   })
   .superRefine((val, ctx) => {
     if (val.role === "agent") {
-      if (!val.full_name || val.full_name.length < 1) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["full_name"],
-          message: "Full name is required for agents.",
-        });
-      }
       if (!val.license_states || val.license_states.length < 1) {
         ctx.addIssue({
           code: "custom",

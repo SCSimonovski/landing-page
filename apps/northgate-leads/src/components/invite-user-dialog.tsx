@@ -52,7 +52,7 @@ export function InviteUserDialog() {
   });
 
   const role = useWatch({ control: form.control, name: "role" });
-  const showAgentFields = role === "agent";
+  const isAgent = role === "agent";
 
   async function onSubmit(values: InviteInput) {
     setSubmitError(null);
@@ -143,42 +143,40 @@ export function InviteUserDialog() {
               )}
             />
 
-            {showAgentFields && (
-              <>
-                <FormField
-                  control={form.control}
-                  name="full_name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Full name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Alice Johnson" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            <FormField
+              control={form.control}
+              name="full_name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Full name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Alice Johnson" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-                <FormField
-                  control={form.control}
-                  name="license_states"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>License states</FormLabel>
-                      <FormDescription>
-                        Pick every state the agent is licensed in.
-                      </FormDescription>
-                      <FormControl>
-                        <LicenseStatesPicker
-                          value={field.value ?? []}
-                          onChange={field.onChange}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </>
+            {isAgent && (
+              <FormField
+                control={form.control}
+                name="license_states"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>License states</FormLabel>
+                    <FormDescription>
+                      Pick every state the agent is licensed in.
+                    </FormDescription>
+                    <FormControl>
+                      <LicenseStatesPicker
+                        value={field.value ?? []}
+                        onChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             )}
 
             {submitError && (
