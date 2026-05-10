@@ -4,6 +4,180 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-05-11 — Swappable email transport (Gmail SMTP for pre-launch)
+
+Welcome emails (post-form-submit) were stuck on Resend's `onboarding@resend.dev` test sender, which only delivers to the email address that owns the Resend account. We don't have a verified consumer domain yet (gates on LLC + brand decision), so end-to-end testing with arbitrary recipients was blocked.
+
+Added a swappable email transport (`packages/shared/email/transport.ts`) — a tiny `EmailTransport` interface + `getEmailTransport()` factory that picks Gmail SMTP (nodemailer) or Resend at runtime via `EMAIL_TRANSPORT`. Same response shape (`{ id, error }`) so `welcome.ts` doesn't care which is underneath. New env vars: `EMAIL_TRANSPORT` (`gmail` | `resend`, defaults to `resend`), `GMAIL_USER`, `GMAIL_APP_PASSWORD` — env count goes 17 → 20.
+
+Pre-launch posture: `EMAIL_TRANSPORT=gmail`, `FROM_EMAIL=<your-gmail>` (Gmail rewrites the From header to the SMTP user regardless, so they have to match). Production switch: drop the var and update `FROM_EMAIL` to the verified consumer domain — no code change.
+
+Caveats acknowledged: Gmail caps at ~500 sends/day on personal accounts; from-address looks personal; deliverability worse than a verified Resend domain. All fine for testing volume; not for launch.
+
+---
+
+## 2026-05-10 — Plan 5++: post-merge polish (mobile, filter UX, palette, search, export)
+
+Same `v03-platform` branch, last ~24h of iteration before merge. No DB changes.
+
+**Mobile login crisis → Server Actions.** `/login` and `/auth/forgot-password` were native `<form onSubmit>` with the React handler attaching at hydration. Mobile devices on the LAN dev URL were blocked from cross-origin RSC payloads (Next.js `allowedDevOrigins` not yet set), so React never hydrated → handler never attached → form fell back to native HTML GET, putting credentials in the URL bar. Fixed root-cause-first by converting both routes to true Server Actions (`"use server"` + `<form action={fn}>` + `useActionState`) so the form's action is a real Next.js endpoint set in SSR HTML — works without JS hydration. Also added `safeNext()` whitelist on `?next=` (rejects `//`, `/\\`, non-internal paths — closes the open-redirect → phishing pivot) and switched to a generic `"Invalid email or password."` message that doesn't leak account-existence-vs-wrong-password.
+
+**Mobile responsiveness pass.** `/leads`, lead detail, dialogs, sidebar all reworked for phone use. Highlights: mobile top bar with `<SidebarTrigger>` + logo (`md:hidden`); `min-w-0` on `SidebarInset` and the leads-page wrapper to fix the page-level horizontal scroll (default `min-width: auto` on flex items refuses to shrink below their content width — was letting the wide table push the whole page wider than the viewport); `SidebarTrigger` primitive made responsive (40×40 on mobile, 28×28 on desktop, with `[&_svg]:size-N` on the icon directly so the `:not([class*='size-'])` Button rule doesn't override); `DialogContent` got `max-h-[85vh] overflow-y-auto` so tall dialogs scroll internally; bulk-confirm titles dropped to `text-base sm:text-lg` so longer status names don't wrap mid-phrase. Lead detail page: header stacks vertically; contact card 2-col with Phone+Email each `col-span-2 sm:col-span-1`; activity events stack timestamp above text on mobile; status & assign selects `w-full` so they fill their cards.
+
+**Two-tier filter UX with overflow promotion.** Primary row stays Status / Agent / Brand. Product, Temperature, Created, State live behind a `+ Filter` button. Picking one promotes it to a chip in the row; URL values keep it visible across renders. `manuallyPromoted` set tracks pre-value promotion. Auto-opening the chip's popover hit a Radix race we couldn't reliably tame, so promotion just shows the empty chip and the user clicks it — one extra click for one fewer race. AddFilterButton uses DropdownMenu (cleaner item-click semantics than Popover-in-Popover).
+
+**Active filter chips.** Below the filter row, one chip per filter that has URL values: `Status: New, Contacted, Appointment ✕`. Up to 3 names listed inline; 4+ collapses to "N selected"; all-options-selected reads "All". Each chip's ✕ clears the param AND drops it from `manuallyPromoted` so the filter button demotes back into `+ Filter`. Reset all moved into this row, right-aligned.
+
+**Search bar.** New `?q=...` query param, trimmed, capped at 80 chars. `buildLeadsQuery` adds an `.or()` of `ILIKE %q%` across `first_name`, `last_name`, `email`, plus a digits-only sub-search against `phone_e164` so any phone format matches. Sanitizes `,()'"\\%_` from input so user input can't break Supabase's `.or()` parser or unintentionally wildcard. UI: 300ms debounced input with search icon + clear button, full-width above filters on mobile, `sm:w-[320px]` right-aligned in the filter row on desktop.
+
+**State filter.** Sixth overflow filter. Whitelisted against `US_STATES` from `@platform/shared/validation/common`. 50 two-letter codes in the menu (matches the table column display).
+
+**Pagination overhaul.** Per-page Select (25/50/100/200) inline with "Showing X-Y of Z". Page-number list with ellipsis collapse (`1 … 4 5 6 … 10`). First/last jump buttons. Arrow-left / arrow-right keyboard navigation (skipped when typing in form fields or modifiers held). All controls visible on both viewports; centered on mobile via `justify-center sm:justify-start`. `NavBtn` helper unifies the disabled-vs-Link branching that all four nav buttons + page numbers share — and avoids a Tailwind preflight footgun where wrapping children in a `<span>` forces block-level SVGs onto their own line, breaking icon+text alignment.
+
+**Indigo palette + sidebar redesign.** `--primary` swapped from sage `oklch(0.42 0.05 165)` to indigo `oklch(0.55 0.18 280)` so brand reads as one palette across CTAs, sidebar, NP/MP badges (now neutral zinc tints), and the new user tile. Sidebar gets a richer footer (avatar with initials in indigo tile, display name + email, dots dropdown trigger) — collapses to icon-only when sidebar is collapsed. Active menu item is a white card with `shadow-sm` + `ring-1` + a 5px indigo accent line on its left edge (overflow-visible override on the menu button base for the negative-left `::before` to escape the rounded card edge). LEADS subtitle in the logo SVG: sage → zinc-500. Status badges go quieter (light bg + matching-hue text, no border): New blue, Contacted cyan (clear hue distinction from New), Appointment amber, Sold emerald, Dead zinc, Refunded red. Pending invite indicator softened from `amber-500/700` to `amber-400/600`.
+
+**CSV export bulk action.** New "Export CSV" button in `BulkActionBar`. Fetches selected leads via `supabase.from("leads").select(...).in("id", ids)` (RLS-scoped naturally; agents get their own, admins get all), builds CSV in the browser (RFC 4180 escaping, CRLF lines, UTF-8 BOM for Excel encoding detection), triggers download via Blob + synthetic `<a download>` click. Curated columns: Created / Brand / Product / First / Last / Phone / Email / State / Age / Score / Temperature / Status / Assigned agent / Notes / On DNC. Filename `leads-YYYYMMDD-HHMM.csv`. No new API endpoint or RPC; bounded by the existing 100-row bulk cap.
+
+**Sticky checkbox column (desktop).** `sm:sticky sm:left-0 sm:bg-{card,inherit}` on header + body checkbox cells so multi-select stays usable when horizontal-scrolling the wide table. `bg-inherit` on body cells with `bg-card hover:bg-muted` (opaque, not `/50`) on the row so other columns don't show through during scroll. Mobile leaves the cell non-sticky. `pl-0` on the Created column so spacing between checkbox and timestamp doesn't double-up.
+
+**Smaller things:** filter popovers viewport-clamped on mobile (`w-[calc(100vw-1.5rem)] max-w-[20rem] sm:w-56`); bulk dialogs left-aligned on mobile with text-base titles + alert icons centered (was top-aligned + bigger); status select in lead detail drops `<SelectValue>` entirely (Radix was duplicating the badge text into the trigger); `data-scroll-behavior="smooth"` on `<html>` so route transitions snap instantly while in-page anchor scrolls keep their animation.
+
+---
+
+## 2026-05-09 — Plan 5+ safety layer: bulk_operation_id + 100-row cap + confirm modal
+
+Same `v03-platform` branch — picked up architect feedback on the bulk RPCs (Claude Web review). Three architectural concerns addressed; one strategic decision (RPC stays dumb, modal carries safety logic).
+
+**Migration** (`20260509192618_bulk_operation_id_and_cap.sql`):
+- `lead_events.bulk_operation_id` (nullable uuid). NULL for individual RPC writes (Plan 5's per-row pattern) and for `insert_lead_with_consent`'s system events; populated by both bulk RPCs going forward — every event from one bulk call shares the same UUID. **Backfill is impossible** (the grouping doesn't exist after the fact), so the column had to be added before any future caller would have wanted it.
+- `CREATE OR REPLACE` on both bulk RPCs (`bulk_assign_leads`, `bulk_update_lead_status`) to: (a) generate a fresh `gen_random_uuid()` per call, (b) stamp it on every `lead_events` insert in that call, (c) reject arrays over **100 leads** with `'bulk operations limited to 100 leads (got N)'` (errcode `22023`). The cap guards against the lock-holding scenario where a 500-lead bulk would queue concurrent `/api/leads` writers.
+- Same RPC signatures as the prior migration (`(uuid[], uuid)` / `(uuid[], lead_status)`). **No `mode` parameter.** Architect call: the per-row no-op short-circuit already handles "skip rows where current === target"; mode would have been functionally informational. Modal carries all caller-side safety logic.
+- Replaces the legacy `event_data.bulk = true` field — superseded by the dedicated column. `event_data` for bulk events now matches per-row events (just `{old, new}` for status_change, `{old_agent_id, new_agent_id}` for assigned).
+
+**`<BulkConfirmDialog>`** — alert-style modal, two shapes:
+- **Status mode** (triggered when any selected lead has `status !== target`): breakdown per current status; distinct red warning when any selected lead would move *backward* in the sales funnel (`new < contacted < appointment < sold`; terminals `dead` / `refunded` reachable from anywhere — funnel ranks live as a frontend constant in `lib/leads/lead-status-options.ts`, RPC stays dumb). Two buttons when regressions present: **primary** "Apply to N (skip downgrades)" + **secondary** "Apply to all (incl. K downgrades)". Single primary button when no regressions.
+- **Assign mode** (triggered when any selected lead has `agent_id IS NOT NULL` and `agent_id !== target`): breakdown per current agent. Single primary button "Reassign all N" — no skip-mode needed per architect call (assign-overwrite is the actual intent of bulk-assign; the modal's job is showing the cross-agent diff so the operator confirms knowingly).
+
+**Heterogeneity branching in `<BulkActionBar>`:**
+- Pick "Assign to Bob": all selected unassigned → submit immediately (fresh assignment, no overwrite). Mix includes already-assigned-to-others → modal opens.
+- Pick "Set Contacted": all selected already in target → toast "no-op" with no action. Anything else → modal opens.
+- Submitting via modal sends only the IDs the chosen button corresponds to (safe-only vs all). The RPC's no-op short-circuit further filters; the result is the same DB state regardless of which button you pick when there are no regressions.
+
+**Verification** (`scripts/test-platform-rls.ts`): now **62 assertions** (~50s runtime). Three new assertions:
+- Two `assigned` events from one `bulk_assign_leads` call share a non-null `bulk_operation_id` (same UUID across both rows)
+- Per-row `update_lead_status` (Plan 5 RPC) leaves `bulk_operation_id = NULL` (proves the column distinguishes bulk vs per-row writes)
+- 101-id arrays to either bulk RPC raise `'bulk operations limited to 100 leads'`
+
+Updated the existing Assertion #31 to check `bulk_operation_id !== NULL` instead of the legacy `event_data.bulk` field.
+
+**vitest unchanged** (10 files / 192 tests). NP + Heritage lint unchanged (1 pre-existing RHF warning each).
+
+**Architect's separation principle locked in:** RPC validates auth + cap + atomic per-row apply with bulk_operation_id stamp; that's it. Modal owns all UX safety — heterogeneity detection, regression warning, default vs override. Lets the safety logic evolve (different funnel ordering, additional warnings) without schema migrations.
+
+---
+
+## 2026-05-09 — Plan 5+ polish: bulk lead operations (assign + status change)
+
+Same `v03-platform` branch — picked up the user's feedback after Plan 5 smoke ("assigning leads one by one is tedious"). Mirrors Plan 5's RPC-only-writes pattern for bulk operations.
+
+**Migration** (`20260509030752_bulk_lead_rpcs.sql`):
+- `bulk_assign_leads(p_lead_ids uuid[], p_new_agent_id uuid)` — admin/superadmin only. Atomic transaction (all-or-nothing). Per-lead no-op short-circuit. Per-lead `assigned` event with actor + `event_data.bulk = true`. NULL agent_id allowed (= unassign).
+- `bulk_update_lead_status(p_lead_ids uuid[], p_new_status lead_status)` — agent on own leads OR admin/superadmin. **Atomicity guarantee:** an agent passing a batch that includes a foreign lead → whole batch reverts (verified). Per-lead no-op short-circuit. Per-lead `status_change` event with actor + `bulk = true`.
+
+Both EXECUTE granted to `authenticated`. No new direct UPDATE grants on `leads` — extends Plan 5 Decision #13 (RPC-only-writes pattern).
+
+**UI** (admin/superadmin only):
+- **Checkbox column** at the leftmost position of `/leads` table — agents don't see it (matches RPC's admin-only constraint for bulk_assign + keeps the agent UI uncluttered).
+- **Header checkbox** = select-all-visible-on-this-page (cross-page selection deferred). Three states: checked / indeterminate / unchecked.
+- **Sticky `<BulkActionBar>`** at top of the page when selection is non-empty. Shows `N leads selected` + `Assign to ▼` + `Set status ▼` + `Clear`. Each action calls its bulk RPC. Toast on success, refresh + clear selection. Designed so future actions (Mark DNC, bulk delete) drop in as more buttons.
+- **Selection state** lives in a `<LeadSelectionProvider>` client context wrapping the page (NOT in URL — selection is ephemeral; persisting across navigations is its own UX problem).
+- Row checkbox click stops propagation so it doesn't trigger the row's click-to-detail navigation.
+
+**Verification:** `scripts/test-platform-rls.ts` extended from 47 → **56 assertions** (~45s runtime). Four new bulk-RPC assertions:
+- bulk_assign_leads: admin succeeds + writes per-lead `assigned` events with bulk=true; agent → permission denied
+- bulk_update_lead_status: agent on own leads succeeds; agent on mixed (own + foreign) batch → atomic revert (verified pre/post state)
+
+vitest unchanged (10 files / 192 tests — bulk RPCs are integration-tested via the script).
+
+**Defer / OOB:**
+- Bulk delete — TCPA-adjacent (consent_log is append-only per AGENTS.md § 6; `lead_events` + `consent_log` FK chain has no CASCADE). Worth its own plan covering soft-delete-via-`deleted_at`-column vs hard-delete-with-explicit-child-cleanup.
+- Cross-page selection persistence — header checkbox currently scopes to visible page only. Adding "select all 247 matching leads" UX needs a different selection model (filter-based vs id-based) and a confirmation hint.
+- Bulk Mark DNC — admin-only action sketched in user's mental model; defer to a small plan once the immediate pain is gone.
+
+NP + Heritage runtime byte-identical (no consumer-app changes).
+
+---
+
+## 2026-05-09 — Plan 5: Northgate Leads v0.3 (lead detail + status + assignment + notes + /account + RPC-only-writes)
+
+Plan 5 per the architect-approved plan at `.claude/plans/reviewing-the-plan-as-dazzling-bumblebee.md`. Closes the three operator gaps Plan 4's smoke surfaced: no in-app lead assignment (was SQL-only), no agent status updates (`leads.status` enum sat unused), no profile / password change UI. Architectural lock-in: **all row-scoped writes from `authenticated` flow through SECURITY DEFINER RPCs**, NOT direct UPDATE grants — Plan 5 is where the RPC-only-writes pattern gets written into the codebase as the convention.
+
+**Schema discoveries that significantly tightened scope:**
+- `leads.status` ENUM column already existed (`new / contacted / appointment / sold / dead / refunded`, 6 states aligned with playbook 04 KPIs). Resolved Claude Web's "wrong vocabulary" risk by using what's there. Captures appointment_rate / close_rate / refund_rate directly; reach_rate is partially derivable (`1 - count(new)/total`) but doesn't distinguish "no answer" from "answered" — see OOB note for the `no_answer` follow-up.
+- `lead_event_type` enum already had `created`, `status_change`, `note_added` (+ infra events). `insert_lead_with_consent` already writes `created` events for every new lead — **no backfill needed; no `/api/leads` change.**
+- `leads.notes` + `leads.outcome` columns already existed, currently unused. Surfaced `notes` on the detail page.
+
+**Migration** (`20260509012042_v03_rpcs_and_lead_events_actor.sql`): adds `lead_events.actor_platform_user_id` (nullable FK to `platform_users(id)`); adds `'assigned'` to `lead_event_type` enum; adds 5 SECURITY DEFINER RPCs (all `set search_path = public`, all `EXECUTE` granted to `authenticated`):
+- `update_lead_status(p_lead_id, p_new_status)` — agent on own leads OR admin/superadmin. No-op short-circuit. Atomic update + `status_change` event with actor.
+- `update_lead_notes(p_lead_id, p_notes)` — same auth scope. Soft-truncates at 1000 chars (paste-from-CRM tolerance). `note_added` event.
+- `assign_lead(p_lead_id, p_new_agent_id)` — admin/superadmin only. NULL = unassign. `assigned` event.
+- `set_platform_user_active(p_target_user_id, p_new_active)` — admin/superadmin. **Refuses self-deactivation; refuses admin deactivating a superadmin** (first place admin diverges from superadmin per Plan 3 Decision #3; superadmin-on-superadmin is allowed).
+- `update_agent_profile(p_full_name, p_license_states)` — caller must have an `agents` row. **Raises `'no agent row for current user'` for admin/superadmin callers** — UI hides the section but RPC defends in depth.
+
+Adds SELECT grants + role-aware policies on `consent_log` and `lead_events` (admin/superadmin all; agent own-lead via `leads.agent_id` join). NO direct UPDATE / INSERT / DELETE grants on any of these tables for `authenticated` — writes only through the RPCs.
+
+**Fix-up migration** (`20260509013034_grant_service_role_consent_lead_events_delete.sql`): pre-existing baseline-era gap — `service_role` lacked DELETE on `consent_log` + `lead_events`. Surfaced when `test-platform-rls.ts` cleanup tried to delete test fixtures. Same pattern as Plan 3's `20260504130000_grant_service_role_platform_users.sql` fix-up.
+
+**Lead detail page** (`/leads/[id]`): single-page card stack (no tabs):
+- Header: name + `<LeadStatusSelect>` (color-coded badge per status) + `<LeadAssignSelect>` (admin-only)
+- Contact info, per-product details, **notes editor** (debounced 1s idle auto-save — NOT blur), Compliance card (`consent_log` rows), Activity timeline (`lead_events` reverse chronological with actor display)
+- Activity copy: type-specific per event_type (`status_change` renders both badges inline; `assigned`/`note_added`/`created`/system events all custom)
+- Actor display: `agents.full_name` for agent actors, `email` for admin/superadmin, "system" for NULL
+- Empty states: "No consent records found for this lead." (anomaly — should never fire) / "No activity yet."
+- RLS: if user can't see this lead, the SELECT returns null → `notFound()`.
+
+**`/users` polish:** active/inactive toggle column with shadcn `<Switch>` calling `set_platform_user_active`. Self-toggle and admin→superadmin both client-side disabled with tooltip; RPC also enforces (defense in depth).
+
+**`/leads` polish:** status column added (color-coded badge); status sortable; **assigned-agent-name sortable** via Supabase's `foreignTable: "agent"` option; status filter (multi-select FilterMenu, 6 options, `?status=x&status=y`); **click row → navigate to detail** (`onClick + router.push` per Plan 4's asChild rule; `tel:`/`mailto:` cells `stopPropagation()`; `cursor-pointer` for affordance). Extracted per-row client wrapper (`<LeadRow>`) so the table chrome stays a Server Component.
+
+**`/account` page:** Sidebar gains an Account link (visible to all roles).
+- **Profile section** (server-side conditional, agents only): full_name + license_states via `update_agent_profile` RPC. Reuses extracted `<LicenseStatesPicker>` (also used by InviteUserDialog).
+- **Password section** (all roles): two-step — verify current via `signInWithPassword` (Supabase replaces session cookies in-place; no sign-out cycle), then `updateUser({ password })`. 8-char min matches setup-password convention.
+- **Email section** (all roles): read-only with disclaimer: "Contact your administrator to change your email." Email change deferred — JWT identity + `platform_users.email` join-key + Supabase Auth confirmation flow is real scope (v0.4 OOB).
+
+**Verification** (`scripts/test-platform-rls.ts` extended from 8 → **47 assertions**, ~40s runtime):
+- All 5 RPCs: agent-on-own success / agent-on-other denied / admin success matrix
+- `assigned` event written with correct actor; `status_change` event written with correct actor
+- `set_platform_user_active`: admin self-deactivation refused; admin → superadmin refused (first divergence); superadmin → superadmin allowed; agent → permission denied
+- `update_agent_profile`: agent on own → success; admin (no agent row) → loud failure; agent submitting empty `license_states` → validation error
+- SELECT-policy tests: agent sees own-lead consent_log + lead_events; agent sees 0 rows for other agents' leads; anon blocked on both tables
+- **Anti-grant test**: agent calling `.from('leads').update({ on_dnc: true })` → permission denied (defends the RPC-only-writes pattern against a future migration accidentally adding the grant)
+- Cleanup: deletes lead_events + consent_log + leads + agents + platform_users + auth.users in FK-safe order; verified clean by re-running the script back-to-back.
+
+**Branch:** `v03-platform` off `main` (Plan 4's `shadcn-refactor` merged via PR #8 first per Plan 5 sequencing decision).
+
+**Tests:** vitest stays at 10 files / 192 tests (added 4 new assertions in `leads-query.test.ts` covering status filter + foreignTable sort + status validation; the integration RPC coverage lives in `test-platform-rls.ts`).
+
+**Decisions locked** (full table in plan file): 26 entries; key ones:
+- D#1 Status enum: existing 6 (no churn)
+- D#13 RPC-only-writes pattern: locked
+- D#7 admin cannot deactivate superadmin (first divergence point)
+- D#22 click-row-to-detail: `onClick + router.push` (NOT `<TableRow asChild><Link>`)
+- D#23 no-op short-circuit on status/notes/assignment unchanged
+
+**Open follow-ups** (post-Plan-5):
+- Email change on /account (Supabase Auth confirmation flow + `platform_users.email` sync; defer to v0.4)
+- `no_answer` 7th status state — if agent feedback says reach_rate granularity matters
+- Refund workflow (v0.4) — the `refunded` enum value is wired but no programmatic flow yet; admin manually marks for now
+- Bulk reassignment when an agent leaves
+- Notification on assignment (silent today)
+- Search by name/phone/email (defer until volume)
+- Docs pass omnibus (status enum vocabulary in playbook 04 § 3.1; RPC-only-writes pattern in AGENTS.md § 6 — already done; Plan 3 magic-link → password decision-log; northgate-leads rename; asChild convention from Plan 4; sortable headers reversal of Plan 3 Decision #20)
+
+NP + Heritage runtime byte-identical (no consumer-app changes; `/api/leads` already inserts `created` event via existing `insert_lead_with_consent` RPC).
+
+---
+
 ## 2026-05-09 — Plan 4 polish pass (palette, filters, sortable headers, pending-invite, cursor, hydration)
 
 Same `shadcn-refactor` branch — picked up the previous day's UI smoke feedback. No schema or RLS changes.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,29 @@ import { Label } from "@/components/ui/label";
 
 // Lands here from a Supabase password-recovery email. Same hash-fragment
 // pattern as setup-password, but expects type=recovery.
+
+// Translate Supabase's raw exchangeCodeForSession errors to user-readable
+// copy. The PKCE-verifier-missing case is the most common operator
+// support hit: user requests reset on browser A, clicks email link in
+// browser B, gets a wall-of-text error. Catch by both error.code and
+// the message string (older client versions don't populate code).
+function friendlyExchangeError(error: { code?: string; message?: string }): string {
+  const code = error.code ?? "";
+  const msg = (error.message ?? "").toLowerCase();
+  if (
+    code === "flow_state_not_found" ||
+    code === "flow_state_expired" ||
+    msg.includes("pkce") ||
+    msg.includes("code verifier") ||
+    msg.includes("flow state")
+  ) {
+    return "This password-reset link was started in a different browser (or your browser cleared its cookies between requesting the link and clicking it). Request a new link from the same browser you'll click it in.";
+  }
+  if (code === "otp_expired" || msg.includes("expired")) {
+    return "This password-reset link has expired. Request a new one.";
+  }
+  return error.message ?? "Something went wrong. Request a new link.";
+}
 
 type Status =
   | { kind: "verifying" }
@@ -57,7 +81,7 @@ export default function ResetPasswordPage() {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (cancelled) return;
         if (error) {
-          setStatus({ kind: "error", message: error.message });
+          setStatus({ kind: "error", message: friendlyExchangeError(error) });
           return;
         }
         window.history.replaceState(null, "", window.location.pathname);
@@ -152,10 +176,13 @@ export default function ResetPasswordPage() {
           <CardHeader>
             <CardTitle>Recovery link issue</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-4">
             <p role="alert" className="text-sm text-destructive">
               {status.message}
             </p>
+            <Button asChild variant="outline">
+              <Link href="/auth/forgot-password">Request a new link</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>

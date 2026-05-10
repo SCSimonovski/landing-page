@@ -11,6 +11,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { InviteUserDialog } from "@/components/invite-user-dialog";
+import { UsersActiveToggle } from "./active-toggle";
+import { ResendInviteButton } from "./resend-invite-button";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +45,7 @@ function formatRelative(iso: string): string {
 }
 
 export default async function UsersPage() {
-  await requireAdmin();
+  const caller = await requireAdmin();
   const supabase = await createSupabaseServerClient();
 
   // platform_users is the principal table; agents joins in for the
@@ -128,6 +130,7 @@ export default async function UsersPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Active</TableHead>
                 <TableHead>Full name</TableHead>
                 <TableHead>License states</TableHead>
                 <TableHead>Joined</TableHead>
@@ -136,7 +139,7 @@ export default async function UsersPage() {
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-12">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-12">
                     No users yet.
                   </TableCell>
                 </TableRow>
@@ -160,9 +163,10 @@ export default async function UsersPage() {
                             Inactive
                           </span>
                         ) : pending ? (
-                          <span className="inline-flex items-center gap-1.5 text-sm text-amber-700">
-                            <span className="h-2 w-2 rounded-full bg-amber-500" />
+                          <span className="inline-flex items-center gap-1.5 text-sm text-amber-600">
+                            <span className="h-2 w-2 rounded-full bg-amber-400" />
                             Pending invite
+                            <ResendInviteButton email={u.email} />
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
@@ -170,6 +174,16 @@ export default async function UsersPage() {
                             Active
                           </span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <UsersActiveToggle
+                          targetUserId={u.id}
+                          targetEmail={u.email}
+                          targetRole={u.role}
+                          initialActive={u.active}
+                          isSelf={u.id === caller.id}
+                          callerRole={caller.role}
+                        />
                       </TableCell>
                       <TableCell className="text-foreground">
                         {u.agents?.full_name ?? (

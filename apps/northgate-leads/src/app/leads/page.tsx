@@ -2,9 +2,11 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getPlatformUser } from "@/lib/auth/get-platform-user";
 import { buildLeadsQuery, parseFilters } from "@/lib/leads-query";
-import { LeadTable } from "@/components/lead-table";
+import { LeadTable, type LeadRowData } from "@/components/lead-table";
 import { FilterBar } from "@/components/filter-bar";
 import { Pagination } from "@/components/pagination";
+import { LeadSelectionProvider } from "@/components/lead-selection-provider";
+import { BulkActionBar, type SelectionLead } from "@/components/bulk-action-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -24,18 +26,19 @@ export default async function LeadsPage({
   const params = await searchParams;
   const filters = parseFilters(params);
 
+  const supabase = await createSupabaseServerClient();
   const platformUser = await getPlatformUser();
+  // Sign out before redirecting to /login. Otherwise the auth session
+  // lingers, middleware redirects /login → /leads (REDIRECT_IF_AUTHED),
+  // /leads redirects back here → ERR_TOO_MANY_REDIRECTS.
   if (!platformUser) {
-    // Authenticated session exists (middleware would've redirected otherwise),
-    // but no platform_users row → admin hasn't provisioned this user yet.
-    // Sign them out so they don't loop on /leads.
+    await supabase.auth.signOut();
     redirect("/login?error=not_provisioned");
   }
   if (!platformUser.active) {
+    await supabase.auth.signOut();
     redirect("/login?error=inactive");
   }
-
-  const supabase = await createSupabaseServerClient();
 
   // For admin/superadmin: load the agents list for the agent filter dropdown.
   // For agent role: skip (their UI doesn't show the agent filter).
@@ -63,18 +66,31 @@ export default async function LeadsPage({
   })();
   const errorMsg = errorKey ? LEADS_ERROR_MESSAGES[errorKey] : null;
 
+  // Compact projection of leads for the BulkActionBar — only the fields
+  // it needs to compute the modal's diff (status + agent_id per id).
+  const leadsForBulk =
+    ((leads ?? []) as unknown as SelectionLead[]).map((l) => ({
+      id: l.id,
+      status: l.status,
+      agent_id: l.agent_id,
+    }));
+
   return (
-    <>
+    <LeadSelectionProvider>
+      <BulkActionBar
+        isAdmin={isAdmin}
+        agents={agentsForFilter ?? []}
+        leads={leadsForBulk}
+      />
+
       {errorMsg && (
         <div className="border-b bg-destructive/5 px-6 py-3">
-          <div className="mx-auto max-w-7xl">
-            <p
-              role="alert"
-              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-            >
-              {errorMsg}
-            </p>
-          </div>
+          <p
+            role="alert"
+            className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {errorMsg}
+          </p>
         </div>
       )}
       <FilterBar
@@ -82,9 +98,9 @@ export default async function LeadsPage({
         role={platformUser.role}
         agents={agentsForFilter}
       />
-      <div className="mx-auto max-w-7xl">
+      <div className="w-full min-w-0">
         <LeadTable
-          leads={(leads ?? []) as unknown as Parameters<typeof LeadTable>[0]["leads"]}
+          leads={(leads ?? []) as unknown as LeadRowData[]}
           role={platformUser.role}
           searchParams={params}
         />
@@ -95,6 +111,6 @@ export default async function LeadsPage({
           total={count ?? 0}
         />
       </div>
-    </>
+    </LeadSelectionProvider>
   );
 }

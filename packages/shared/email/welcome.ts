@@ -1,5 +1,5 @@
 import "server-only";
-import { getResendClient } from "../resend/client";
+import { getEmailTransport } from "./transport";
 import {
   getLeadById,
   isSuppressed,
@@ -61,8 +61,8 @@ export async function sendWelcomeEmail(leadId: string): Promise<void> {
     }
 
     const { subject, text } = renderWelcomeEmail(lead, siteUrl);
-    const resend = getResendClient();
-    const { data, error } = await resend.emails.send({
+    const transport = getEmailTransport();
+    const { id, error } = await transport.send({
       from: process.env.FROM_EMAIL!,
       to: lead.email,
       subject,
@@ -73,13 +73,13 @@ export async function sendWelcomeEmail(leadId: string): Promise<void> {
       console.error(`[email] lead=${leadId} send_error name=${error.name}`);
       return;
     }
-    if (!data?.id) {
+    if (!id) {
       console.error(`[email] lead=${leadId} send_no_id`);
       return;
     }
 
-    await recordEmailSent(leadId, data.id);
-    console.log(`[email] lead=${leadId} sent id=${data.id}`);
+    await recordEmailSent(leadId, id);
+    console.log(`[email] lead=${leadId} sent id=${id}`);
   } catch (err) {
     const e = err as { code?: string | number };
     console.error(`[email] lead=${leadId} error code=${e.code ?? "unknown"}`);

@@ -88,6 +88,13 @@ export type Database = {
             referencedRelation: "leads"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "consent_log_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_with_agent"
+            referencedColumns: ["id"]
+          },
         ]
       }
       dnc_registry: {
@@ -107,6 +114,8 @@ export type Database = {
       }
       lead_events: {
         Row: {
+          actor_platform_user_id: string | null
+          bulk_operation_id: string | null
           created_at: string
           event_data: Json | null
           event_type: Database["public"]["Enums"]["lead_event_type"]
@@ -114,6 +123,8 @@ export type Database = {
           lead_id: string
         }
         Insert: {
+          actor_platform_user_id?: string | null
+          bulk_operation_id?: string | null
           created_at?: string
           event_data?: Json | null
           event_type: Database["public"]["Enums"]["lead_event_type"]
@@ -121,6 +132,8 @@ export type Database = {
           lead_id: string
         }
         Update: {
+          actor_platform_user_id?: string | null
+          bulk_operation_id?: string | null
           created_at?: string
           event_data?: Json | null
           event_type?: Database["public"]["Enums"]["lead_event_type"]
@@ -129,10 +142,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "lead_events_actor_platform_user_id_fkey"
+            columns: ["actor_platform_user_id"]
+            isOneToOne: false
+            referencedRelation: "platform_users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "lead_events_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_events_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_with_agent"
             referencedColumns: ["id"]
           },
         ]
@@ -294,9 +321,66 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      leads_with_agent: {
+        Row: {
+          age: number | null
+          agent_full_name: string | null
+          agent_id: string | null
+          best_time_to_call: Database["public"]["Enums"]["time_of_day"] | null
+          brand: string | null
+          created_at: string | null
+          details: Json | null
+          email: string | null
+          fbc: string | null
+          fbclid: string | null
+          fbp: string | null
+          first_contact_at: string | null
+          first_name: string | null
+          id: string | null
+          intent_score: number | null
+          landing_page_variant: string | null
+          last_name: string | null
+          notes: string | null
+          on_dnc: boolean | null
+          outcome: string | null
+          phone_e164: string | null
+          policy_value: number | null
+          product: string | null
+          state: string | null
+          status: Database["public"]["Enums"]["lead_status"] | null
+          temperature: Database["public"]["Enums"]["lead_temperature"] | null
+          utm_adset: string | null
+          utm_campaign: string | null
+          utm_creative: string | null
+          utm_source: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      assign_lead: {
+        Args: { p_lead_id: string; p_new_agent_id: string }
+        Returns: undefined
+      }
+      bulk_assign_leads: {
+        Args: { p_lead_ids: string[]; p_new_agent_id: string }
+        Returns: undefined
+      }
+      bulk_update_lead_status: {
+        Args: {
+          p_lead_ids: string[]
+          p_new_status: Database["public"]["Enums"]["lead_status"]
+        }
+        Returns: undefined
+      }
       current_platform_user: {
         Args: never
         Returns: {
@@ -307,6 +391,25 @@ export type Database = {
         }[]
       }
       insert_lead_with_consent: { Args: { payload: Json }; Returns: string }
+      set_platform_user_active: {
+        Args: { p_new_active: boolean; p_target_user_id: string }
+        Returns: undefined
+      }
+      update_agent_profile: {
+        Args: { p_full_name: string; p_license_states: string[] }
+        Returns: undefined
+      }
+      update_lead_notes: {
+        Args: { p_lead_id: string; p_notes: string }
+        Returns: undefined
+      }
+      update_lead_status: {
+        Args: {
+          p_lead_id: string
+          p_new_status: Database["public"]["Enums"]["lead_status"]
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       lead_event_type:
@@ -321,6 +424,7 @@ export type Database = {
         | "sms_skipped_dnc"
         | "sms_skipped_suppression"
         | "email_skipped_suppression"
+        | "assigned"
       lead_status:
         | "new"
         | "contacted"
@@ -469,6 +573,7 @@ export const Constants = {
         "sms_skipped_dnc",
         "sms_skipped_suppression",
         "email_skipped_suppression",
+        "assigned",
       ],
       lead_status: [
         "new",

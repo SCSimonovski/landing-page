@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState } from "react";
 import Link from "next/link";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,45 +13,28 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  forgotPasswordAction,
+  type ForgotPasswordState,
+} from "./actions";
 
-type Status =
-  | { kind: "idle" }
-  | { kind: "submitting" }
-  | { kind: "sent" }
-  | { kind: "error"; message: string };
+const initialState: ForgotPasswordState = { status: "idle" };
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [state, formAction, isPending] = useActionState(
+    forgotPasswordAction,
+    initialState,
+  );
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email) return;
-    setStatus({ kind: "submitting" });
-
-    const supabase = createSupabaseBrowserClient();
-    const redirectTo = `${window.location.origin}/auth/reset-password`;
-    const { error } = await supabase.auth.resetPasswordForEmail(
-      email.trim().toLowerCase(),
-      { redirectTo },
-    );
-
-    if (error) {
-      setStatus({ kind: "error", message: error.message });
-      return;
-    }
-    setStatus({ kind: "sent" });
-  }
-
-  if (status.kind === "sent") {
+  if (state.status === "sent") {
     return (
       <div className="w-full max-w-md px-6 py-16">
         <Card>
           <CardHeader>
             <CardTitle>Check your email</CardTitle>
             <CardDescription>
-              If an account exists for <strong>{email}</strong>, we sent a
-              password-reset link. The link expires after 1 hour.
+              If an account exists for <strong>{state.email}</strong>, we
+              sent a password-reset link. The link expires after 1 hour.
             </CardDescription>
           </CardHeader>
           <CardFooter>
@@ -75,27 +57,26 @@ export default function ForgotPasswordPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+          <form action={formAction} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
+                name="email"
                 type="email"
                 inputMode="email"
                 autoComplete="email"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                disabled={status.kind === "submitting"}
+                disabled={isPending}
               />
             </div>
-            <Button type="submit" disabled={status.kind === "submitting" || !email}>
-              {status.kind === "submitting" ? "Sending…" : "Send reset link"}
+            <Button type="submit" disabled={isPending}>
+              {isPending ? "Sending…" : "Send reset link"}
             </Button>
-            {status.kind === "error" && (
+            {state.status === "error" && (
               <p role="alert" className="text-sm text-destructive">
-                {status.message}
+                {state.message}
               </p>
             )}
           </form>

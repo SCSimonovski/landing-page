@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@platform/shared/types/database";
+import { US_STATES } from "@platform/shared/validation/common";
 import { getMulti, getSingle, type SearchParams } from "./url-params";
+import {
+  isLeadStatus,
+  type LeadStatus,
+} from "./leads/lead-status-options";
 
 // Loose Supabase client typing. `@supabase/ssr`'s createServerClient and
 // `@supabase/supabase-js`'s SupabaseClient have different generic arities
@@ -14,7 +19,9 @@ export type SortColumn =
   | "last_name"
   | "state"
   | "age"
-  | "intent_score";
+  | "intent_score"
+  | "status"
+  | "assigned_agent_name";
 export type SortDir = "asc" | "desc";
 
 export type LeadFilters = {
@@ -23,6 +30,9 @@ export type LeadFilters = {
   products: string[];
   temps: Array<"hot" | "warm" | "cold">;
   agents: string[]; // agent.id values, OR the literal "unassigned"
+  statuses: LeadStatus[];
+  states: string[]; // US state codes, whitelisted against US_STATES
+  q?: string; // free-text search across name / email / phone
   // Single-value:
   since?: "7d" | "30d" | "90d";
   // User-controllable sort. undefined = default (created_at desc).
@@ -44,14 +54,18 @@ const SINCE_VALUES = new Set(["7d", "30d", "90d"]);
 // typo'd values from reaching Supabase's .order() and surfacing as confusing
 // "column does not exist" errors. Brand / product / temperature are filters,
 // not useful sort dimensions; phone / email alphabetical sort is weird;
-// details is JSONB; agent_id sort approximates "assigned" and is omitted
-// for v0.2 simplicity.
+// details is JSONB.
+//
+// `assigned_agent_name` maps to the `leads_with_agent` view's flat
+// `agent_full_name` column (see buildLeadsQuery).
 const SORT_COLUMNS = new Set<SortColumn>([
   "created_at",
   "last_name",
   "state",
   "age",
   "intent_score",
+  "status",
+  "assigned_agent_name",
 ]);
 
 // Parse search params from a Next 16 page.tsx into a typed filters object.
@@ -80,11 +94,28 @@ export function parseFilters(params: SearchParams): LeadFilters {
   const dirRaw = getSingle(params, "dir");
   const dir: SortDir = dirRaw === "asc" ? "asc" : "desc";
 
+  const statuses = getMulti(params, "status").filter((s) =>
+    isLeadStatus(s),
+  ) as LeadStatus[];
+
+  // Whitelist against US_STATES so a hand-crafted ?state=ZZ doesn't reach
+  // the DB query as a confusing no-results filter.
+  const stateAllowed = new Set<string>(US_STATES);
+  const states = getMulti(params, "state").filter((s) => stateAllowed.has(s));
+
+  // Free-text search. Trimmed, capped at 80 chars so a paste-bomb can't
+  // become a giant ILIKE pattern.
+  const qRaw = getSingle(params, "q")?.trim() ?? "";
+  const q = qRaw.length > 0 ? qRaw.slice(0, 80) : undefined;
+
   return {
     brands: getMulti(params, "brand"),
     products: getMulti(params, "product"),
     temps,
     agents: getMulti(params, "agent"),
+    statuses,
+    states,
+    q,
     since: sinceTyped,
     sort,
     dir,
@@ -103,41 +134,62 @@ export function sinceToCutoff(since: LeadFilters["since"]): string | null {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
-// Build the leads query for the platform's leads table.
-//
-// `role` controls whether to join `agents` (admin/superadmin get the assigned
-// agent's full_name in the row); for agent role we skip the join (their leads
-// are all theirs by definition; the join would be wasted).
-//
-// Returns the chained query (not awaited) so the caller awaits it. The query
-// uses `count: 'exact'` so the response includes the total row count for
-// pagination's "Showing X-Y of Z" line.
+// Build the leads read query. Reads from `leads_with_agent`, a
+// security_invoker=on view that flattens leads + agents and exposes
+// `agent_full_name` as a native column (so .order() works on it
+// without PostgREST's one-to-one embed-sort quirks). RLS is inherited
+// from `leads` and `agents`. `count: 'exact'` for pagination totals.
 export function buildLeadsQuery(
   filters: LeadFilters,
   role: LeadsQueryRole,
   supabase: AnySupabaseClient,
 ) {
-  // Admin/superadmin: join the assigned agent for the "Assigned" column.
-  // Only one FK from leads to agents exists; alias to `agent` for cleaner
-  // field naming on the row (singular makes the LeadTable cell read better).
-  const select = role === "agent" ? "*" : "*, agent:agents(id, full_name)";
-
   // Default sort: created_at desc. User-controllable sort overrides via
   // ?sort=<column>&dir=<asc|desc>; the column is whitelisted in
   // parseFilters so .order() never sees an arbitrary string.
-  const sortCol = filters.sort ?? "created_at";
+  //
+  // assigned_agent_name maps to the view's flat `agent_full_name` column.
+  // Unassigned leads (agent_full_name null) cluster last via nullsFirst:false.
   const ascending = filters.dir === "asc";
+  let q = supabase.from("leads_with_agent").select("*", { count: "exact" });
 
-  let q = supabase
-    .from("leads")
-    .select(select, { count: "exact" })
-    .order(sortCol, { ascending });
+  if (filters.sort === "assigned_agent_name") {
+    if (role === "agent") {
+      // Agent's leads are all theirs by definition; no useful sort to do.
+      q = q.order("created_at", { ascending: false });
+    } else {
+      q = q.order("agent_full_name", { ascending, nullsFirst: false });
+    }
+  } else {
+    const sortCol = filters.sort ?? "created_at";
+    q = q.order(sortCol, { ascending });
+  }
 
   // Multi-value filters use .in(). Single value works too (Supabase handles
   // a 1-element array fine). Empty array = no filter applied.
   if (filters.brands.length > 0) q = q.in("brand", filters.brands);
   if (filters.products.length > 0) q = q.in("product", filters.products);
   if (filters.temps.length > 0) q = q.in("temperature", filters.temps);
+  if (filters.statuses.length > 0) q = q.in("status", filters.statuses);
+  if (filters.states.length > 0) q = q.in("state", filters.states);
+
+  // Free-text search. Strip characters that have meaning in Supabase's .or()
+  // grammar (commas, parens, quotes, backslashes) and ILIKE wildcards
+  // (% and _) so user input can't break the query string or unintentionally
+  // wildcard. Phone gets a digits-only sub-search so any phone format the
+  // user types matches the E.164 stored value.
+  if (filters.q) {
+    const safe = filters.q.replace(/[,()'"\\%_]/g, "").trim();
+    const digits = filters.q.replace(/\D/g, "");
+    const orParts: string[] = [];
+    if (safe) {
+      orParts.push(`first_name.ilike.%${safe}%`);
+      orParts.push(`last_name.ilike.%${safe}%`);
+      orParts.push(`email.ilike.%${safe}%`);
+    }
+    if (digits) orParts.push(`phone_e164.ilike.%${digits}%`);
+    if (orParts.length > 0) q = q.or(orParts.join(","));
+  }
 
   const cutoff = sinceToCutoff(filters.since);
   if (cutoff) q = q.gte("created_at", cutoff);

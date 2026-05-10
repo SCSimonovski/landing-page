@@ -21,6 +21,8 @@ const baseFilters: LeadFilters = {
   products: [],
   temps: [],
   agents: [],
+  statuses: [],
+  states: [],
   dir: "desc",
   page: 1,
   perPage: 50,
@@ -33,12 +35,41 @@ describe("parseFilters", () => {
       products: [],
       temps: [],
       agents: [],
+      statuses: [],
+      states: [],
       since: undefined,
       sort: undefined,
       dir: "desc",
       page: 1,
       perPage: DEFAULT_PER_PAGE,
     });
+  });
+
+  it("parses multi-value status filter", () => {
+    expect(
+      parseFilters({ status: ["new", "contacted"] }).statuses,
+    ).toEqual(["new", "contacted"]);
+  });
+
+  it("filters out unknown status values", () => {
+    expect(
+      parseFilters({ status: ["new", "bogus"] }).statuses,
+    ).toEqual(["new"]);
+  });
+
+  it("parses multi-value state filter", () => {
+    expect(parseFilters({ state: ["CA", "NY", "TX"] }).states).toEqual([
+      "CA",
+      "NY",
+      "TX",
+    ]);
+  });
+
+  it("filters out non-US-state state codes", () => {
+    expect(parseFilters({ state: ["CA", "ZZ", "NY"] }).states).toEqual([
+      "CA",
+      "NY",
+    ]);
   });
 
   it("parses valid sort + dir", () => {
@@ -73,6 +104,8 @@ describe("parseFilters", () => {
       products: ["final_expense"],
       temps: ["hot"],
       agents: ["abc-123"],
+      statuses: [],
+      states: [],
       since: "30d",
       sort: undefined,
       dir: "desc",
@@ -170,11 +203,11 @@ describe("buildLeadsQuery", () => {
     expect(select?.args[0]).toBe("*");
   });
 
-  it("admin role: select includes agents join", () => {
+  it("read path uses leads_with_agent view (not the leads table)", () => {
     const { client, calls } = makeMockClient();
     buildLeadsQuery(baseFilters, "admin", client);
-    const select = calls.find((c) => c.method === "select");
-    expect(select?.args[0]).toContain("agent:agents");
+    const from = calls.find((c) => c.method === "from");
+    expect(from?.args[0]).toBe("leads_with_agent");
   });
 
   it("default sort: created_at desc", () => {
@@ -204,6 +237,45 @@ describe("buildLeadsQuery", () => {
     );
     const order = calls.find((c) => c.method === "order");
     expect(order?.args).toEqual(["intent_score", { ascending: false }]);
+  });
+
+  it("status filter applied via .in", () => {
+    const { client, calls } = makeMockClient();
+    buildLeadsQuery(
+      { ...baseFilters, statuses: ["new", "contacted"] },
+      "agent",
+      client,
+    );
+    const inCalls = calls.filter((c) => c.method === "in");
+    expect(inCalls).toContainEqual({
+      method: "in",
+      args: ["status", ["new", "contacted"]],
+    });
+  });
+
+  it("admin: assigned_agent_name sort uses agent_full_name (view column), nullsLast", () => {
+    const { client, calls } = makeMockClient();
+    buildLeadsQuery(
+      { ...baseFilters, sort: "assigned_agent_name", dir: "asc" },
+      "admin",
+      client,
+    );
+    const order = calls.find((c) => c.method === "order");
+    expect(order?.args).toEqual([
+      "agent_full_name",
+      { ascending: true, nullsFirst: false },
+    ]);
+  });
+
+  it("agent: assigned_agent_name sort falls back to created_at desc", () => {
+    const { client, calls } = makeMockClient();
+    buildLeadsQuery(
+      { ...baseFilters, sort: "assigned_agent_name", dir: "asc" },
+      "agent",
+      client,
+    );
+    const order = calls.find((c) => c.method === "order");
+    expect(order?.args).toEqual(["created_at", { ascending: false }]);
   });
 
   it("single brand filter via .in", () => {
