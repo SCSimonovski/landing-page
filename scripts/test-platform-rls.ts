@@ -164,11 +164,11 @@ async function main() {
   const { data: pus, error: puErr } = await sr
     .from("platform_users")
     .insert([
-      { email: SUPER_EMAIL, role: "superadmin" },
-      { email: SUPER2_EMAIL, role: "superadmin" },
-      { email: ADMIN_EMAIL, role: "admin" },
-      { email: AGENT_A_EMAIL, role: "agent" },
-      { email: AGENT_B_EMAIL, role: "agent" },
+      { email: SUPER_EMAIL, role: "superadmin", full_name: "TestRLS Super" },
+      { email: SUPER2_EMAIL, role: "superadmin", full_name: "TestRLS Super2" },
+      { email: ADMIN_EMAIL, role: "admin", full_name: "TestRLS Admin" },
+      { email: AGENT_A_EMAIL, role: "agent", full_name: "TestRLS Agent A" },
+      { email: AGENT_B_EMAIL, role: "agent", full_name: "TestRLS Agent B" },
     ])
     .select();
   if (puErr || !pus || pus.length !== 5) {
@@ -421,6 +421,61 @@ async function main() {
     "superadmin: 4 leads (all fixtures)",
     superLeads.error === null && superLeads.data?.length === 4,
     superLeads.error ? superLeads.error.message : `got ${superLeads.data?.length} rows`,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Assertion 5b (Plan 5b): each role sees their own platform_users.full_name
+  // via the regular SELECT policy. getPlatformUser() relies on this path
+  // (a second SELECT after the RPC, since the RPC return shape couldn't be
+  // ALTERed without a CASCADE-drop of every dependent policy — see the
+  // 20260511120000 migration notes). Guards against a future policy
+  // narrowing that would break the sidebar / actor display.
+  // ---------------------------------------------------------------------------
+  console.log("\n--- Assertion 5b: own platform_users.full_name visible to each role ---");
+  const superNameRow = await superClient
+    .from("platform_users")
+    .select("full_name")
+    .eq("email", SUPER_EMAIL)
+    .maybeSingle();
+  assert(
+    "superadmin: own platform_users.full_name = 'TestRLS Super'",
+    superNameRow.error === null &&
+      (superNameRow.data as { full_name: string | null } | null)?.full_name ===
+        "TestRLS Super",
+    superNameRow.error
+      ? superNameRow.error.message
+      : `actual: ${JSON.stringify(superNameRow.data)}`,
+  );
+
+  const adminClientForName = await clientForUser(ADMIN_EMAIL, TEST_PASSWORD);
+  const adminNameRow = await adminClientForName
+    .from("platform_users")
+    .select("full_name")
+    .eq("email", ADMIN_EMAIL)
+    .maybeSingle();
+  assert(
+    "admin: own platform_users.full_name = 'TestRLS Admin'",
+    adminNameRow.error === null &&
+      (adminNameRow.data as { full_name: string | null } | null)?.full_name ===
+        "TestRLS Admin",
+    adminNameRow.error
+      ? adminNameRow.error.message
+      : `actual: ${JSON.stringify(adminNameRow.data)}`,
+  );
+
+  const aNameRow = await aClient
+    .from("platform_users")
+    .select("full_name")
+    .eq("email", AGENT_A_EMAIL)
+    .maybeSingle();
+  assert(
+    "agent A: own platform_users.full_name = 'TestRLS Agent A'",
+    aNameRow.error === null &&
+      (aNameRow.data as { full_name: string | null } | null)?.full_name ===
+        "TestRLS Agent A",
+    aNameRow.error
+      ? aNameRow.error.message
+      : `actual: ${JSON.stringify(aNameRow.data)}`,
   );
 
   // ---------------------------------------------------------------------------

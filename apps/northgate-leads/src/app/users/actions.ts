@@ -58,9 +58,16 @@ export async function inviteUser(input: InviteInput): Promise<InviteResult> {
     }
     createdAuthUserId = authData.user.id;
 
+    // full_name on platform_users is the canonical source post-Plan-5b
+    // (every role carries it). The agents insert below still writes the
+    // same value — transitional, see the comment there.
     const { data: pu, error: puErr } = await supabase
       .from("platform_users")
-      .insert({ email: parsed.email, role: parsed.role })
+      .insert({
+        email: parsed.email,
+        role: parsed.role,
+        full_name: parsed.full_name,
+      })
       .select("id")
       .single();
     if (puErr || !pu) {
@@ -69,11 +76,15 @@ export async function inviteUser(input: InviteInput): Promise<InviteResult> {
     createdPlatformUserId = pu.id;
 
     if (parsed.role === "agent") {
+      // full_name still written to agents to satisfy the existing NOT NULL
+      // constraint; reads switched to platform_users.full_name in this same
+      // plan, so this duplicate write is transitional. Follow-up migration
+      // drops the agents.full_name column entirely.
       const { data: a, error: agErr } = await supabase
         .from("agents")
         .insert({
           platform_user_id: pu.id,
-          full_name: parsed.full_name!,
+          full_name: parsed.full_name,
           license_states: parsed.license_states!,
         })
         .select("id")

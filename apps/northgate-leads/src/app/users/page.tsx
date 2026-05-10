@@ -11,17 +11,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { InviteUserDialog } from "@/components/invite-user-dialog";
+import { displayNameOrDash } from "@/lib/auth/display-name";
 import { UsersActiveToggle } from "./active-toggle";
 import { ResendInviteButton } from "./resend-invite-button";
 
 export const dynamic = "force-dynamic";
 
-type AgentNested = { full_name: string; license_states: string[] } | null;
+type AgentNested = { license_states: string[] } | null;
 type Row = {
   id: string;
   email: string;
   role: string;
   active: boolean;
+  full_name: string | null;
   created_at: string;
   agents: AgentNested;
   // Accepted = the user clicked the invite link and set a password
@@ -48,13 +50,14 @@ export default async function UsersPage() {
   const caller = await requireAdmin();
   const supabase = await createSupabaseServerClient();
 
-  // platform_users is the principal table; agents joins in for the
-  // role=agent rows so we can show full_name + license_states inline.
-  // The FK is one-to-one (agents.platform_user_id unique), so the
-  // nested select returns a single object (or null) per row.
+  // platform_users is the principal table — full_name lives here for
+  // every role (Plan 5b). agents joins in for the role=agent rows so we
+  // can show license_states inline. The FK is one-to-one
+  // (agents.platform_user_id unique), so the nested select returns a
+  // single object (or null) per row.
   const { data, error } = await supabase
     .from("platform_users")
-    .select("id, email, role, active, created_at, agents(full_name, license_states)")
+    .select("id, email, role, active, full_name, created_at, agents(license_states)")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -96,6 +99,7 @@ export default async function UsersPage() {
     email: string;
     role: string;
     active: boolean;
+    full_name: string | null;
     created_at: string;
     agents: AgentNested | AgentNested[] | null;
   };
@@ -105,6 +109,7 @@ export default async function UsersPage() {
     email: r.email,
     role: r.role,
     active: r.active,
+    full_name: r.full_name ?? null,
     created_at: r.created_at,
     agents: Array.isArray(r.agents) ? (r.agents[0] ?? null) : (r.agents ?? null),
     acceptedAt: acceptedByEmail.get(r.email) ?? null,
@@ -186,7 +191,9 @@ export default async function UsersPage() {
                         />
                       </TableCell>
                       <TableCell className="text-foreground">
-                        {u.agents?.full_name ?? (
+                        {u.full_name?.trim() ? (
+                          displayNameOrDash({ full_name: u.full_name })
+                        ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>

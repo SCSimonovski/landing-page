@@ -32,14 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { NorthgateLeadsLogo } from "@/components/northgate-leads-logo";
 import type { PlatformUser } from "@/lib/auth/get-platform-user";
-
-// Display name preference: agent's full_name (from agents table) > email
-// local part. Email's local part is shown as the subtitle line either way.
-function resolveDisplayName(fullName: string | null, email: string): string {
-  if (fullName && fullName.trim()) return fullName.trim();
-  const local = email.split("@")[0] ?? email;
-  return local || email;
-}
+import { displayName as resolveDisplayName } from "@/lib/auth/display-name";
 
 // Initials for the avatar tile. Two letters when the display name has at
 // least two words (first + last), otherwise the first two characters.
@@ -69,7 +62,7 @@ export function AppSidebar({
   const isAccountActive =
     pathname === "/account" || pathname.startsWith("/account/");
 
-  const displayName = resolveDisplayName(fullName, email);
+  const displayName = resolveDisplayName({ full_name: fullName, email });
   const initials = initialsOf(displayName);
 
   return (

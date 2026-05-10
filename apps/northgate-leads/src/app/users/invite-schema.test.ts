@@ -11,6 +11,7 @@ describe("inviteSchema", () => {
     const r = inviteSchema.parse({
       email: "Mixed.Case@Example.COM",
       role: "admin",
+      full_name: "Ops Operator",
     });
     expect(r.email).toBe("mixed.case@example.com");
   });
@@ -19,6 +20,7 @@ describe("inviteSchema", () => {
     const r = inviteSchema.parse({
       email: "  user@example.com  ",
       role: "admin",
+      full_name: "Ops Operator",
     });
     expect(r.email).toBe("user@example.com");
   });
@@ -27,22 +29,38 @@ describe("inviteSchema", () => {
     const r = inviteSchema.safeParse({
       email: "not-an-email",
       role: "admin",
+      full_name: "Ops Operator",
     });
     expect(r.success).toBe(false);
   });
 
-  it("admin can submit without full_name or license_states", () => {
+  it("admin needs full_name (Plan 5b — required for every role)", () => {
     const r = inviteSchema.safeParse({
       email: "ops@example.com",
       role: "admin",
     });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues.some((i) => i.path.includes("full_name"))).toBe(
+        true,
+      );
+    }
+  });
+
+  it("admin with full_name passes (no license_states required)", () => {
+    const r = inviteSchema.safeParse({
+      email: "ops@example.com",
+      role: "admin",
+      full_name: "Ops Operator",
+    });
     expect(r.success).toBe(true);
   });
 
-  it("superadmin can submit without full_name or license_states", () => {
+  it("superadmin with full_name passes (no license_states required)", () => {
     const r = inviteSchema.safeParse({
       email: "boss@example.com",
       role: "superadmin",
+      full_name: "Big Boss",
     });
     expect(r.success).toBe(true);
   });
