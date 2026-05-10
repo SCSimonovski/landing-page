@@ -52,12 +52,14 @@ function SortHead({
   searchParams,
   sortCol,
   sortDir,
+  className,
 }: {
   column: string;
   children: React.ReactNode;
   searchParams: SearchParams;
   sortCol: string | undefined;
   sortDir: string | undefined;
+  className?: string;
 }) {
   const isActive = sortCol === column;
   const Icon = !isActive
@@ -66,7 +68,7 @@ function SortHead({
       ? ArrowUpIcon
       : ArrowDownIcon;
   return (
-    <TableHead>
+    <TableHead className={className}>
       <Link
         href={`/leads${cycleSort(searchParams, column)}`}
         className={cn(
@@ -133,7 +135,7 @@ export function LeadTable({
         <TableHeader>
           <TableRow>
             <LeadHeaderCheckbox visibleIds={visibleIds} />
-            <SortHead column="created_at" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Created</SortHead>
+            <SortHead column="created_at" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir} className="pl-0">Created</SortHead>
             <TableHead>Brand</TableHead>
             <TableHead>Product</TableHead>
             <SortHead column="status" searchParams={searchParams} sortCol={sortCol} sortDir={sortDir}>Status</SortHead>

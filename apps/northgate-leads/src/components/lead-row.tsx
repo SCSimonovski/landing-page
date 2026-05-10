@@ -119,10 +119,10 @@ export function LeadRow({
   return (
     <TableRow
       onClick={() => router.push(`/leads/${lead.id}`)}
-      className="cursor-pointer"
+      className="cursor-pointer bg-card hover:bg-muted"
     >
       <LeadRowCheckbox leadId={lead.id} />
-      <TableCell className="whitespace-nowrap text-muted-foreground">
+      <TableCell className="whitespace-nowrap pl-0 text-muted-foreground">
         {formatCreated(lead.created_at)}
       </TableCell>
       <TableCell>

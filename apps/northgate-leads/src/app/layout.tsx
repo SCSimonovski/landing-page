@@ -50,6 +50,20 @@ export default async function RootLayout({
   const platformUser = authUser ? await getPlatformUser() : null;
   const showShell = Boolean(authUser && platformUser && platformUser.active);
 
+  // For agents, pull full_name so the sidebar footer can show a friendly
+  // name instead of the email's local part. Admin/superadmin have no
+  // agents row → fullName stays null and the sidebar falls back to email.
+  let fullName: string | null = null;
+  if (showShell && platformUser?.agentId) {
+    const { data: agentRow } = await supabase
+      .from("agents")
+      .select("full_name")
+      .eq("id", platformUser.agentId)
+      .maybeSingle();
+    fullName =
+      (agentRow as { full_name: string } | null)?.full_name ?? null;
+  }
+
   return (
     <html
       lang="en"
@@ -59,7 +73,11 @@ export default async function RootLayout({
       <body className="min-h-svh bg-background text-foreground">
         {showShell ? (
           <SidebarProvider defaultOpen={sidebarOpen}>
-            <AppSidebar user={platformUser!} email={authUser!.email ?? ""} />
+            <AppSidebar
+              user={platformUser!}
+              email={authUser!.email ?? ""}
+              fullName={fullName}
+            />
             <SidebarInset>
               <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card px-3 md:hidden">
                 <SidebarTrigger />

@@ -7,6 +7,7 @@ import {
   UsersIcon,
   LogOutIcon,
   UserCircleIcon,
+  MoreHorizontalIcon,
 } from "lucide-react";
 import {
   Sidebar,
@@ -32,22 +33,34 @@ import {
 import { NorthgateLeadsLogo } from "@/components/northgate-leads-logo";
 import type { PlatformUser } from "@/lib/auth/get-platform-user";
 
-// Server component. Receives the resolved platform user from the root
-// layout — role drives whether the Users link renders. The sign-out
-// trigger is a form posting to /auth/signout (existing route handler
-// from Plan 3) so this stays a server component end-to-end.
+// Display name preference: agent's full_name (from agents table) > email
+// local part. Email's local part is shown as the subtitle line either way.
+function resolveDisplayName(fullName: string | null, email: string): string {
+  if (fullName && fullName.trim()) return fullName.trim();
+  const local = email.split("@")[0] ?? email;
+  return local || email;
+}
+
+// Initials for the avatar tile. Two letters when the display name has at
+// least two words (first + last), otherwise the first two characters.
+function initialsOf(displayName: string): string {
+  const words = displayName.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return (words[0]![0]! + words[words.length - 1]![0]!).toUpperCase();
+  }
+  return displayName.slice(0, 2).toUpperCase();
+}
+
 export function AppSidebar({
   user,
   email,
+  fullName,
 }: {
   user: PlatformUser;
   email: string;
+  fullName: string | null;
 }) {
   const isAdmin = user.role === "admin" || user.role === "superadmin";
-
-  // Highlight the nav item matching the current route. startsWith covers
-  // future nested routes like /leads/[id] and /users/[id] keeping the
-  // parent section active.
   const pathname = usePathname();
   const isLeadsActive =
     pathname === "/leads" || pathname.startsWith("/leads/");
@@ -55,6 +68,9 @@ export function AppSidebar({
     pathname === "/users" || pathname.startsWith("/users/");
   const isAccountActive =
     pathname === "/account" || pathname.startsWith("/account/");
+
+  const displayName = resolveDisplayName(fullName, email);
+  const initials = initialsOf(displayName);
 
   return (
     <Sidebar collapsible="icon">
@@ -124,14 +140,28 @@ export function AppSidebar({
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger
-                data-sidebar="menu-button"
-                data-size="default"
-                className={cn(
-                  sidebarMenuButtonVariants({ size: "default" }),
-                  "justify-start",
-                )}
+                // Card chrome is stripped on collapsed (icon-only) state so
+                // only the avatar tile remains.
+                className="flex w-full cursor-pointer items-center gap-2 rounded-md border border-sidebar-border bg-sidebar-accent p-2 text-left text-sidebar-accent-foreground shadow-sm outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent/80 focus-visible:ring-2 group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:shadow-none group-data-[collapsible=icon]:hover:bg-transparent"
               >
-                <span className="truncate">{email}</span>
+                <span
+                  aria-hidden="true"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-md bg-sidebar-avatar text-xs font-semibold text-sidebar-avatar-foreground"
+                >
+                  {initials}
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col leading-tight group-data-[collapsible=icon]:hidden">
+                  <span className="truncate text-sm font-medium">
+                    {displayName}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {email}
+                  </span>
+                </span>
+                <MoreHorizontalIcon
+                  aria-hidden="true"
+                  className="size-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden"
+                />
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 side="top"

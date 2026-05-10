@@ -162,8 +162,8 @@ export default async function UsersPage() {
                             Inactive
                           </span>
                         ) : pending ? (
-                          <span className="inline-flex items-center gap-1.5 text-sm text-amber-700">
-                            <span className="h-2 w-2 rounded-full bg-amber-500" />
+                          <span className="inline-flex items-center gap-1.5 text-sm text-amber-600">
+                            <span className="h-2 w-2 rounded-full bg-amber-400" />
                             Pending invite
                           </span>
                         ) : (

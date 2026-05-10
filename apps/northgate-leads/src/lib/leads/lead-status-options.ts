@@ -1,19 +1,7 @@
-// Single source of truth for the lead_status enum on the platform.
-//
-// Mirrors the Postgres enum (`new / contacted / appointment / sold / dead /
-// refunded`). Aligned with playbook 04 KPIs: appointment rate, close rate,
-// refund rate. reach_rate is partially derivable (1 - count(new)/total) but
-// doesn't distinguish "called, no answer" from "called, answered" — see
-// Plan 5 OOB notes for the no_answer follow-up if agent feedback warrants.
-//
-// Badge color conventions (Plan 5 Decision #2):
-//   new         → muted blue (informational, default)
-//   contacted   → blue
-//   appointment → amber (action pending; eyeballs on this row)
-//   sold        → emerald (closed-won; explicitly NOT platform-primary sage
-//                  to avoid visual collision with primary CTAs)
-//   dead        → muted gray
-//   refunded    → red (closed-lost-with-money-back)
+// Mirrors the Postgres lead_status enum. Aligned with playbook 04 KPIs
+// (appointment rate, close rate, refund rate). reach_rate is partially
+// derivable (1 - count(new)/total) but doesn't distinguish "no answer"
+// from "answered" — see Plan 5 OOB notes for the no_answer follow-up.
 
 export const LEAD_STATUS_VALUES = [
   "new",
@@ -35,16 +23,15 @@ export const LEAD_STATUS_LABEL: Record<LeadStatus, string> = {
   refunded: "Refunded",
 };
 
-// Tailwind class strings for the status badge. Uses the same approach as
-// the Plan 4 brand/product/temp variants: a small object the badge cell
-// pulls from, instead of multiplying badge variants in the cva.
+// Tailwind classes per status. Pulled in by the badge cell directly to
+// keep the cva variant count down.
 export const LEAD_STATUS_BADGE_CLASS: Record<LeadStatus, string> = {
-  new: "bg-blue-50 text-blue-900",
-  contacted: "bg-blue-100 text-blue-900",
-  appointment: "bg-amber-100 text-amber-900",
-  sold: "bg-emerald-100 text-emerald-900",
-  dead: "bg-muted text-muted-foreground",
-  refunded: "bg-red-100 text-red-900",
+  new: "bg-blue-50 text-blue-700",
+  contacted: "bg-cyan-50 text-cyan-800",
+  appointment: "bg-amber-50 text-amber-800",
+  sold: "bg-emerald-50 text-emerald-800",
+  dead: "bg-zinc-100 text-zinc-700",
+  refunded: "bg-red-50 text-red-800",
 };
 
 export function isLeadStatus(value: string): value is LeadStatus {

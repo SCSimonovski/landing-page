@@ -33,7 +33,7 @@ export function LeadHeaderCheckbox({ visibleIds }: { visibleIds: string[] }) {
   }, [visibleIds.length]);
 
   return (
-    <TableHead className="w-10">
+    <TableHead className="sm:sticky sm:left-0 sm:z-20 sm:bg-card !px-3">
       <Checkbox
         ref={triggerRef}
         checked={value}

@@ -285,9 +285,9 @@ function AssignBody({
               </ul>
             </div>
             {pulledCount > 0 && (
-              <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
-                <AlertTriangleIcon className="size-4 shrink-0 text-amber-700" />
-                <p className="text-amber-800 text-sm">
+              <div className="flex items-center gap-2 rounded-md border border-yellow-500/40 bg-yellow-400/15 p-3">
+                <AlertTriangleIcon className="size-4 shrink-0 text-yellow-700" />
+                <p className="text-yellow-900 text-sm">
                   {`${pulledCount} lead${pulledCount === 1 ? "" : "s"} will be pulled from their current agents. They'll lose access immediately on save.`}
                 </p>
               </div>

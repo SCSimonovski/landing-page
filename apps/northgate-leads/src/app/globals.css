@@ -28,8 +28,9 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.18 0.01 60);
 
-  /* Sage-derived primary. Buttons, focused inputs, primary CTAs. */
-  --primary: oklch(0.42 0.05 165);
+  /* Indigo primary — same hue as the sidebar avatar so the brand reads
+   * as one palette across the app. Buttons, focused inputs, CTAs. */
+  --primary: oklch(0.55 0.18 280);
   --primary-foreground: oklch(0.985 0.003 67);
 
   /* Soft warm secondary surface. Used for secondary buttons, table-row hover. */
@@ -40,9 +41,10 @@
   --muted: oklch(0.96 0.005 67);
   --muted-foreground: oklch(0.5 0.013 60);
 
-  /* Accent — hover states for ghost/outline buttons + sidebar items. */
-  --accent: oklch(0.94 0.012 165);
-  --accent-foreground: oklch(0.3 0.04 165);
+  /* Accent — hover states for ghost/outline buttons + sidebar items.
+   * Light tint of the indigo primary. */
+  --accent: oklch(0.94 0.018 280);
+  --accent-foreground: oklch(0.3 0.08 280);
 
   /* Destructive (errors, dangerous actions). Warm red. */
   --destructive: oklch(0.55 0.22 27);
@@ -51,8 +53,8 @@
   --border: oklch(0.91 0.005 60);
   --input: oklch(0.91 0.005 60);
 
-  /* Focus ring — a brighter sage so keyboard nav is visible. */
-  --ring: oklch(0.62 0.07 165);
+  /* Focus ring — brighter indigo so keyboard nav is visible. */
+  --ring: oklch(0.62 0.15 280);
 
   --chart-1: oklch(0.55 0.18 27);
   --chart-2: oklch(0.55 0.12 165);
@@ -60,16 +62,19 @@
   --chart-4: oklch(0.7 0.16 80);
   --chart-5: oklch(0.65 0.18 320);
 
-  /* Sidebar — slightly distinct from main background so it reads as
-   * its own surface; sage tint keeps it cohesive with primary. */
-  --sidebar: oklch(0.97 0.008 165);
-  --sidebar-foreground: oklch(0.2 0.01 60);
-  --sidebar-primary: oklch(0.42 0.05 165);
+  /* Sidebar — pale neutral surface; active items + footer card render
+   * white on top of it so they read as floating cards. Indigo avatar
+   * accent (--sidebar-avatar) used for the user tile in the footer. */
+  --sidebar: oklch(0.972 0.003 270);
+  --sidebar-foreground: oklch(0.18 0.01 60);
+  --sidebar-primary: oklch(0.55 0.18 280);
   --sidebar-primary-foreground: oklch(0.985 0.003 67);
-  --sidebar-accent: oklch(0.93 0.018 165);
-  --sidebar-accent-foreground: oklch(0.3 0.04 165);
-  --sidebar-border: oklch(0.9 0.012 165);
-  --sidebar-ring: oklch(0.62 0.07 165);
+  --sidebar-accent: oklch(1 0 0);
+  --sidebar-accent-foreground: oklch(0.18 0.01 60);
+  --sidebar-border: oklch(0.92 0.005 270);
+  --sidebar-ring: oklch(0.62 0.15 280);
+  --sidebar-avatar: oklch(0.55 0.18 280);
+  --sidebar-avatar-foreground: oklch(0.985 0.003 67);
 
   /* Link color — distinct blue for inline links (phone/email in the
    * leads table). Kept separate from primary so primary CTA buttons
@@ -77,17 +82,17 @@
   --link: oklch(0.5 0.15 250);
   --link-hover: oklch(0.4 0.18 250);
 
-  /* In-table badge colors — preserved from Plan 3. */
-  --badge-np-bg: #dce6df;
-  --badge-np-fg: #2f4a40;
-  --badge-heritage-bg: #f4ddd5;
-  --badge-heritage-fg: #5c2d26;
-  --badge-temp-hot-bg: #fecaca;
-  --badge-temp-hot-fg: #991b1b;
-  --badge-temp-warm-bg: #fed7aa;
-  --badge-temp-warm-fg: #9a3412;
-  --badge-temp-cold-bg: #dbeafe;
-  --badge-temp-cold-fg: #1e3a8a;
+  /* In-table badge colors — light tinted bg + darker matching-hue fg. */
+  --badge-np-bg: #f4f4f5;
+  --badge-np-fg: #3f3f46;
+  --badge-heritage-bg: #fef2f2;
+  --badge-heritage-fg: #991b1b;
+  --badge-temp-hot-bg: #fff1f2;
+  --badge-temp-hot-fg: #9f1239;
+  --badge-temp-warm-bg: #fffbeb;
+  --badge-temp-warm-fg: #92400e;
+  --badge-temp-cold-bg: #eff6ff;
+  --badge-temp-cold-fg: #1e40af;
 }
 
 .dark {
@@ -151,6 +156,8 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-avatar: var(--sidebar-avatar);
+  --color-sidebar-avatar-foreground: var(--sidebar-avatar-foreground);
 
   --color-link: var(--link);
   --color-link-hover: var(--link-hover);

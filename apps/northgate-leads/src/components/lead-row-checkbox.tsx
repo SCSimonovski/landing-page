@@ -13,7 +13,10 @@ const stop = (e: React.MouseEvent) => e.stopPropagation();
 export function LeadRowCheckbox({ leadId }: { leadId: string }) {
   const { isSelected, toggle } = useLeadSelection();
   return (
-    <TableCell onClick={stop} className="w-10">
+    <TableCell
+      onClick={stop}
+      className="sm:sticky sm:left-0 sm:z-10 sm:bg-inherit !px-3"
+    >
       <Checkbox
         checked={isSelected(leadId)}
         onCheckedChange={() => toggle(leadId)}
