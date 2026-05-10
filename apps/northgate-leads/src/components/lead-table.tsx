@@ -24,7 +24,7 @@ import type { LeadStatus } from "@/lib/leads/lead-status-options";
 // empty state). Each row is a LeadRow client component (handles
 // click-to-detail navigation per Plan 5 Decision #22).
 
-type LeadRowData = {
+export type LeadRowData = {
   id: string;
   created_at: string;
   brand: string;

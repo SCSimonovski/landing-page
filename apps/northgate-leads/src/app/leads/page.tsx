@@ -2,11 +2,11 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getPlatformUser } from "@/lib/auth/get-platform-user";
 import { buildLeadsQuery, parseFilters } from "@/lib/leads-query";
-import { LeadTable } from "@/components/lead-table";
+import { LeadTable, type LeadRowData } from "@/components/lead-table";
 import { FilterBar } from "@/components/filter-bar";
 import { Pagination } from "@/components/pagination";
 import { LeadSelectionProvider } from "@/components/lead-selection-provider";
-import { BulkActionBar } from "@/components/bulk-action-bar";
+import { BulkActionBar, type SelectionLead } from "@/components/bulk-action-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -67,16 +67,12 @@ export default async function LeadsPage({
 
   // Compact projection of leads for the BulkActionBar — only the fields
   // it needs to compute the modal's diff (status + agent_id per id).
-  const leadsForBulk = (
-    leads as unknown as
-      | Array<{ id: string; status: string; agent_id: string | null }>
-      | null
-      | undefined
-  )?.map((l) => ({
-    id: l.id,
-    status: l.status as Parameters<typeof BulkActionBar>[0]["leads"][number]["status"],
-    agent_id: l.agent_id,
-  })) ?? [];
+  const leadsForBulk =
+    ((leads ?? []) as unknown as SelectionLead[]).map((l) => ({
+      id: l.id,
+      status: l.status,
+      agent_id: l.agent_id,
+    }));
 
   return (
     <LeadSelectionProvider>
@@ -105,7 +101,7 @@ export default async function LeadsPage({
       />
       <div className="mx-auto w-full min-w-0 max-w-7xl">
         <LeadTable
-          leads={(leads ?? []) as unknown as Parameters<typeof LeadTable>[0]["leads"]}
+          leads={(leads ?? []) as unknown as LeadRowData[]}
           role={platformUser.role}
           searchParams={params}
         />

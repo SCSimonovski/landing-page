@@ -93,23 +93,29 @@ The repo is a pnpm workspace. Workspace package `@platform/shared` holds the sha
 apps/
   northgate-protection/    ← mortgage protection landing page (Meridian direction)
   northgate-heritage/      ← final expense landing page (Hearth direction)
-  northgate-leads/         ← agent platform (Phase 2 v0.3: status updates + lead detail + /account + RPC-only-writes)
+  northgate-leads/         ← agent platform (Phase 2 v0.3+polish: bulk ops + filter UX + search + CSV export + indigo palette)
     src/
       app/
-        (auth)/              ← chromeless route group: /login, /auth/{setup,forgot,reset}-password
+        (auth)/              ← chromeless route group: /login (Server Action + safeNext), /auth/{forgot,reset,setup}-password
         account/             ← agent profile (license_states + full_name) + password change + email read-only
-        leads/               ← cross-brand leads table (status + sortable Assigned + status filter + click-to-detail)
+        leads/               ← cross-brand leads table (filters + chips + search + per-page picker + sticky checkbox col)
           [id]/              ← lead detail page (status select + assign select + notes editor + activity timeline)
         users/               ← admin/superadmin User Management + Invite User + active toggle
       components/
         ui/                  ← shadcn primitives (copy-paste; lives in repo)
-        app-sidebar.tsx      ← role-aware sidebar (Users admin-only; Account all roles; active-route highlight)
+        app-sidebar.tsx      ← role-aware sidebar w/ user-tile footer (avatar + name + email + dots dropdown)
+        bulk-action-bar.tsx  ← top-of-table multi-row sticky bar: bulk assign + status + CSV export
+        bulk-confirm-dialog.tsx ← shared confirm modal: status regression / assign overwrite warnings
+        filter-bar.tsx       ← two-tier filters (Status/Agent/Brand always; Product/Temp/Created/State overflow)
+        add-filter-button.tsx ← "+ Filter" dropdown (DropdownMenu, not Popover, for chained-open semantics)
+        filter-menu.tsx      ← per-category multi/single-select popover used by every filter chip
+        pagination.tsx       ← per-page picker + page numbers + first/last + arrow-key shortcuts
         invite-user-dialog.tsx ← RHF + Zod, conditional fields by role
         license-states-picker.tsx ← shared 50-state checkbox grid (invite + /account profile)
         lead-row.tsx         ← per-row client wrapper (click-to-detail navigation)
       lib/
         auth/                ← getPlatformUser, requireAdmin (page redirect), assertAdmin (action throw)
-        leads/               ← status enum constants + badge variants
+        leads/               ← status enum + badge variants + CSV export builder (export-csv.ts)
         supabase/            ← server / browser / middleware / service-role clients
 packages/
   shared/                  ← @platform/shared (workspace internal)
@@ -259,7 +265,7 @@ See `docs/CHANGELOG.md`.
 
 ### Next immediate task
 
-**Meta Pixel client-side install.** Plan 5 (Northgate Leads v0.3: lead detail + status updates + assignment + notes + /account + /users active toggle + RPC-only-writes pattern) shipped on 2026-05-09 — see CHANGELOG. Plans 3, 4, 5 have all been platform pivots / extensions; Pixel install resumes its position now. Path is unchanged: install the Pixel base code via the Next.js Script component on each brand's `<RootLayout>` (per-app, gated on `process.env.NEXT_PUBLIC_META_PIXEL_ID` being set), fire the standard `PageView` on every page load, fire `Lead` on form submit success in each `<LeadForm>`. Privacy-policy update needed too — both brands' `/privacy` page mention Meta sharing but specifics need attorney review (already on the launch checklist below). Platform doesn't get a Pixel (no consumer traffic).
+**Meta Pixel client-side install.** Plan 5 (Northgate Leads v0.3: lead detail + status updates + assignment + notes + /account + /users active toggle + RPC-only-writes pattern) shipped on 2026-05-09; the `v03-platform` branch then absorbed an extensive post-merge polish pass — bulk operations + safety layer, mobile responsiveness across the platform, two-tier filter UX with overflow promotion + active chips, full pagination overhaul (per-page picker + page numbers + keyboard nav), indigo palette + redesigned sidebar (avatar tile + accent line), state filter, debounced search across name/email/phone, CSV export bulk action, sticky checkbox column on desktop, and the mobile-login Server Action conversion (with `safeNext()` open-redirect guard) — merged 2026-05-10. See CHANGELOG. Plans 3, 4, 5+polish have all been platform pivots / extensions; Pixel install resumes its position now. Path is unchanged: install the Pixel base code via the Next.js Script component on each brand's `<RootLayout>` (per-app, gated on `process.env.NEXT_PUBLIC_META_PIXEL_ID` being set), fire the standard `PageView` on every page load, fire `Lead` on form submit success in each `<LeadForm>`. Privacy-policy update needed too — both brands' `/privacy` page mention Meta sharing but specifics need attorney review (already on the launch checklist below). Platform doesn't get a Pixel (no consumer traffic).
 
 Subsequent tasks (rough order, not committed): server-side Meta CAPI dispatch (`/api/leads` `Promise.all` third entry — fires alongside SMS + email); daily DNC scrub cron (populates `dnc_registry` from the FTC list, brand-agnostic); platform v0.4 (refund/replacement workflow); email change on /account (defer; needs Supabase Auth confirmation flow + `platform_users.email` sync); replace placeholder copy + draft consent text + draft `/privacy` + `/terms` content with attorney-reviewed final versions (joint pass across both brands); register custom consumer domains for both brands (gates on LLC + brand); `mpl-prod` Supabase project + baseline migration replay (deferred until launch is imminent — free-tier projects pause after 7 days of inactivity).
 
