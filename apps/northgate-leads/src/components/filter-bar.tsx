@@ -1,6 +1,10 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { FilterMenu } from "@/components/filter-menu";
+import { AddFilterButton } from "@/components/add-filter-button";
 import { clearAll, getMulti, getSingle, type SearchParams } from "@/lib/url-params";
 import {
   LEAD_STATUS_LABEL,
@@ -36,10 +40,9 @@ const STATUS_OPTIONS = LEAD_STATUS_VALUES.map((v) => ({
   label: LEAD_STATUS_LABEL[v],
 }));
 
-// Server Component. Composes per-category FilterMenu dropdowns +
-// "Reset all" link. Each FilterMenu handles its own URL navigation
-// internally (client component); FilterBar reads the current state
-// from searchParams to render selected counts on the buttons.
+// Primary row (Status, Agent, Brand) is always visible. Overflow filters
+// (Product, Temperature, Created) live behind "+ Filter" until the user
+// either picks a value (URL keeps it visible) or manually promotes one.
 export function FilterBar({
   searchParams,
   role,
@@ -51,12 +54,25 @@ export function FilterBar({
 }) {
   const isAdmin = role === "admin" || role === "superadmin";
 
+  // Tracks overflow filters added via "+ Filter" before the user has
+  // picked a value. Once a value lands in the URL, that check takes over.
+  const [manuallyPromoted, setManuallyPromoted] = useState<Set<string>>(
+    () => new Set(),
+  );
+
   const brandsSelected = getMulti(searchParams, "brand");
   const productsSelected = getMulti(searchParams, "product");
   const tempsSelected = getMulti(searchParams, "temp");
   const statusesSelected = getMulti(searchParams, "status");
   const sinceSelected = getSingle(searchParams, "since");
   const agentsSelected = getMulti(searchParams, "agent");
+
+  const productPromoted =
+    productsSelected.length > 0 || manuallyPromoted.has("product");
+  const tempPromoted =
+    tempsSelected.length > 0 || manuallyPromoted.has("temp");
+  const sincePromoted =
+    Boolean(sinceSelected) || manuallyPromoted.has("since");
 
   const hasAnyFilter =
     brandsSelected.length > 0 ||
@@ -73,47 +89,29 @@ export function FilterBar({
       ]
     : [];
 
+  const hiddenOverflow = [
+    productPromoted ? null : { key: "product", label: "Product" },
+    tempPromoted ? null : { key: "temp", label: "Temperature" },
+    sincePromoted ? null : { key: "since", label: "Created" },
+  ].filter((x): x is { key: string; label: string } => x !== null);
+
+  function handleAddFilter(key: string) {
+    setManuallyPromoted((prev) => {
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+  }
+
   return (
-    <div className="border-b bg-card px-6 py-3">
-      <div className="mx-auto max-w-7xl flex flex-wrap items-center gap-2">
-        <FilterMenu
-          label="Brand"
-          paramKey="brand"
-          options={BRAND_OPTIONS}
-          selected={brandsSelected}
-          mode="multi"
-          searchParams={searchParams}
-        />
-        <FilterMenu
-          label="Product"
-          paramKey="product"
-          options={PRODUCT_OPTIONS}
-          selected={productsSelected}
-          mode="multi"
-          searchParams={searchParams}
-        />
+    <div className="border-b bg-card px-4 py-3 sm:px-6">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2">
         <FilterMenu
           label="Status"
           paramKey="status"
           options={STATUS_OPTIONS}
           selected={statusesSelected}
           mode="multi"
-          searchParams={searchParams}
-        />
-        <FilterMenu
-          label="Temperature"
-          paramKey="temp"
-          options={TEMP_OPTIONS}
-          selected={tempsSelected}
-          mode="multi"
-          searchParams={searchParams}
-        />
-        <FilterMenu
-          label="Created"
-          paramKey="since"
-          options={SINCE_OPTIONS}
-          selected={sinceSelected ? [sinceSelected] : []}
-          mode="single"
           searchParams={searchParams}
         />
         {isAdmin && agentOptions.length > 0 && (
@@ -126,11 +124,59 @@ export function FilterBar({
             searchParams={searchParams}
           />
         )}
+        <FilterMenu
+          label="Brand"
+          paramKey="brand"
+          options={BRAND_OPTIONS}
+          selected={brandsSelected}
+          mode="multi"
+          searchParams={searchParams}
+        />
+
+        {productPromoted && (
+          <FilterMenu
+            label="Product"
+            paramKey="product"
+            options={PRODUCT_OPTIONS}
+            selected={productsSelected}
+            mode="multi"
+            searchParams={searchParams}
+          />
+        )}
+        {tempPromoted && (
+          <FilterMenu
+            label="Temperature"
+            paramKey="temp"
+            options={TEMP_OPTIONS}
+            selected={tempsSelected}
+            mode="multi"
+            searchParams={searchParams}
+          />
+        )}
+        {sincePromoted && (
+          <FilterMenu
+            label="Created"
+            paramKey="since"
+            options={SINCE_OPTIONS}
+            selected={sinceSelected ? [sinceSelected] : []}
+            mode="single"
+            searchParams={searchParams}
+          />
+        )}
+
+        {hiddenOverflow.length > 0 && (
+          <AddFilterButton options={hiddenOverflow} onSelect={handleAddFilter} />
+        )}
+
         {hasAnyFilter && (
-          <Button asChild variant="ghost" size="sm" className="h-8 ml-auto">
-            <Link href={clearAll(searchParams) || "/leads"}>
-              Reset all
-            </Link>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-8"
+            onClick={() => setManuallyPromoted(new Set())}
+          >
+            <Link href={clearAll(searchParams) || "/leads"}>Reset all</Link>
           </Button>
         )}
       </div>

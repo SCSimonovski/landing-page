@@ -19,15 +19,8 @@ import { cn } from "@/lib/utils";
 
 type Option = { value: string; label: string };
 
-// Per-category filter dropdown. Renders a button (with active-count badge
-// when a value is set) and a popover with options. Multi-select uses
-// checkboxes and toggles values in/out via toggleMultiParam; single-select
-// uses a list with a check icon next to the active value and toggles via
-// toggleParam.
-//
-// Each click is a router.push to the new URL — server re-renders the page
-// with the updated filter set + the popover stays open. URL is the source
-// of truth (matches Plan 3's URL-as-state pattern).
+// URL is the source of truth — each toggle is a router.push that the
+// server consumes on the next render to refilter the leads query.
 export function FilterMenu({
   label,
   paramKey,
@@ -39,7 +32,7 @@ export function FilterMenu({
   label: string;
   paramKey: string;
   options: Option[];
-  selected: string[]; // current values from URL (always normalized to array)
+  selected: string[];
   mode: "multi" | "single";
   searchParams: SearchParams;
 }) {
@@ -86,7 +79,10 @@ export function FilterMenu({
           <ChevronDownIcon className="size-3.5 opacity-60" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-56 p-1" align="start">
+      <PopoverContent
+        className="w-[calc(100vw-1.5rem)] max-w-[20rem] p-1 sm:w-56"
+        align="start"
+      >
         <div className="max-h-72 overflow-y-auto py-1">
           {options.map((o) => {
             const active = selected.includes(o.value);
