@@ -32,6 +32,7 @@ export type LeadFilters = {
   agents: string[]; // agent.id values, OR the literal "unassigned"
   statuses: LeadStatus[];
   states: string[]; // US state codes, whitelisted against US_STATES
+  q?: string; // free-text search across name / email / phone
   // Single-value:
   since?: "7d" | "30d" | "90d";
   // User-controllable sort. undefined = default (created_at desc).
@@ -102,6 +103,11 @@ export function parseFilters(params: SearchParams): LeadFilters {
   const stateAllowed = new Set<string>(US_STATES);
   const states = getMulti(params, "state").filter((s) => stateAllowed.has(s));
 
+  // Free-text search. Trimmed, capped at 80 chars so a paste-bomb can't
+  // become a giant ILIKE pattern.
+  const qRaw = getSingle(params, "q")?.trim() ?? "";
+  const q = qRaw.length > 0 ? qRaw.slice(0, 80) : undefined;
+
   return {
     brands: getMulti(params, "brand"),
     products: getMulti(params, "product"),
@@ -109,6 +115,7 @@ export function parseFilters(params: SearchParams): LeadFilters {
     agents: getMulti(params, "agent"),
     statuses,
     states,
+    q,
     since: sinceTyped,
     sort,
     dir,
@@ -176,6 +183,24 @@ export function buildLeadsQuery(
   if (filters.temps.length > 0) q = q.in("temperature", filters.temps);
   if (filters.statuses.length > 0) q = q.in("status", filters.statuses);
   if (filters.states.length > 0) q = q.in("state", filters.states);
+
+  // Free-text search. Strip characters that have meaning in Supabase's .or()
+  // grammar (commas, parens, quotes, backslashes) and ILIKE wildcards
+  // (% and _) so user input can't break the query string or unintentionally
+  // wildcard. Phone gets a digits-only sub-search so any phone format the
+  // user types matches the E.164 stored value.
+  if (filters.q) {
+    const safe = filters.q.replace(/[,()'"\\%_]/g, "").trim();
+    const digits = filters.q.replace(/\D/g, "");
+    const orParts: string[] = [];
+    if (safe) {
+      orParts.push(`first_name.ilike.%${safe}%`);
+      orParts.push(`last_name.ilike.%${safe}%`);
+      orParts.push(`email.ilike.%${safe}%`);
+    }
+    if (digits) orParts.push(`phone_e164.ilike.%${digits}%`);
+    if (orParts.length > 0) q = q.or(orParts.join(","));
+  }
 
   const cutoff = sinceToCutoff(filters.since);
   if (cutoff) q = q.gte("created_at", cutoff);
