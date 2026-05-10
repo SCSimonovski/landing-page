@@ -2,14 +2,36 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FilterMenu } from "@/components/filter-menu";
 import { AddFilterButton } from "@/components/add-filter-button";
-import { clearAll, getMulti, getSingle, type SearchParams } from "@/lib/url-params";
+import {
+  clearAll,
+  clearParam,
+  getMulti,
+  getSingle,
+  type SearchParams,
+} from "@/lib/url-params";
 import {
   LEAD_STATUS_LABEL,
   LEAD_STATUS_VALUES,
 } from "@/lib/leads/lead-status-options";
+
+const MAX_CHIP_NAMES = 3;
+
+function summarize(
+  allOptions: { value: string; label: string }[],
+  selected: string[],
+): string {
+  if (selected.length === allOptions.length) return "All";
+  if (selected.length <= MAX_CHIP_NAMES) {
+    return selected
+      .map((v) => allOptions.find((o) => o.value === v)?.label ?? v)
+      .join(", ");
+  }
+  return `${selected.length} selected`;
+}
 
 type AgentOption = { id: string; full_name: string };
 
@@ -103,9 +125,55 @@ export function FilterBar({
     });
   }
 
+  function handleChipClear(key: string) {
+    setManuallyPromoted((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+  }
+
+  type ActiveChip = { key: string; label: string; summary: string };
+  const activeChips: ActiveChip[] = [
+    statusesSelected.length > 0 && {
+      key: "status",
+      label: "Status",
+      summary: summarize(STATUS_OPTIONS, statusesSelected),
+    },
+    isAdmin && agentsSelected.length > 0 && {
+      key: "agent",
+      label: "Agent",
+      summary: summarize(agentOptions, agentsSelected),
+    },
+    brandsSelected.length > 0 && {
+      key: "brand",
+      label: "Brand",
+      summary: summarize(BRAND_OPTIONS, brandsSelected),
+    },
+    productsSelected.length > 0 && {
+      key: "product",
+      label: "Product",
+      summary: summarize(PRODUCT_OPTIONS, productsSelected),
+    },
+    tempsSelected.length > 0 && {
+      key: "temp",
+      label: "Temperature",
+      summary: summarize(TEMP_OPTIONS, tempsSelected),
+    },
+    sinceSelected && {
+      key: "since",
+      label: "Created",
+      summary:
+        SINCE_OPTIONS.find((o) => o.value === sinceSelected)?.label ??
+        sinceSelected,
+    },
+  ].filter((c): c is ActiveChip => Boolean(c));
+
   return (
     <div className="border-b bg-card px-4 py-3 sm:px-6">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2">
+      <div className="mx-auto max-w-7xl">
+        <div className="flex flex-wrap items-center gap-2">
         <FilterMenu
           label="Status"
           paramKey="status"
@@ -178,6 +246,28 @@ export function FilterBar({
           >
             <Link href={clearAll(searchParams) || "/leads"}>Reset all</Link>
           </Button>
+        )}
+        </div>
+        {activeChips.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {activeChips.map((c) => (
+              <span
+                key={c.key}
+                className="inline-flex items-center gap-1.5 rounded-md border bg-muted/60 px-2 py-1 text-xs"
+              >
+                <span className="font-medium text-foreground">{c.label}:</span>
+                <span className="text-muted-foreground">{c.summary}</span>
+                <Link
+                  href={clearParam(searchParams, c.key) || "/leads"}
+                  onClick={() => handleChipClear(c.key)}
+                  aria-label={`Clear ${c.label} filter`}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <XIcon className="size-3" />
+                </Link>
+              </span>
+            ))}
+          </div>
         )}
       </div>
     </div>
