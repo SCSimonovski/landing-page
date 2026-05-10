@@ -84,14 +84,12 @@ export default async function LeadsPage({
 
       {errorMsg && (
         <div className="border-b bg-destructive/5 px-6 py-3">
-          <div className="mx-auto max-w-7xl">
-            <p
-              role="alert"
-              className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-            >
-              {errorMsg}
-            </p>
-          </div>
+          <p
+            role="alert"
+            className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {errorMsg}
+          </p>
         </div>
       )}
       <FilterBar
@@ -99,7 +97,7 @@ export default async function LeadsPage({
         role={platformUser.role}
         agents={agentsForFilter}
       />
-      <div className="mx-auto w-full min-w-0 max-w-7xl">
+      <div className="w-full min-w-0">
         <LeadTable
           leads={(leads ?? []) as unknown as LeadRowData[]}
           role={platformUser.role}

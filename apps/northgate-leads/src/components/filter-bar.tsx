@@ -263,8 +263,7 @@ export function FilterBar({
 
   return (
     <div className="border-b bg-card px-4 py-3 sm:px-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
           <SearchInput
             initial={qFromUrl}
             onCommit={commitSearch}
@@ -370,7 +369,6 @@ export function FilterBar({
             </Button>
           </div>
         )}
-      </div>
     </div>
   );
 }

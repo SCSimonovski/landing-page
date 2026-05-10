@@ -291,7 +291,7 @@ export function BulkActionBar({
   return (
     <>
       <div className="sticky top-0 z-20 border-b bg-card px-4 py-3 shadow-sm sm:px-6">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="flex items-center justify-between gap-2 sm:justify-start">
             <span className="text-sm font-medium">
               {count} lead{count === 1 ? "" : "s"} selected
