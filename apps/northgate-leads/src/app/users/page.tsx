@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { InviteUserDialog } from "@/components/invite-user-dialog";
 import { UsersActiveToggle } from "./active-toggle";
+import { ResendInviteButton } from "./resend-invite-button";
 
 export const dynamic = "force-dynamic";
 
@@ -165,6 +166,7 @@ export default async function UsersPage() {
                           <span className="inline-flex items-center gap-1.5 text-sm text-amber-600">
                             <span className="h-2 w-2 rounded-full bg-amber-400" />
                             Pending invite
+                            <ResendInviteButton email={u.email} />
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 text-sm text-foreground">

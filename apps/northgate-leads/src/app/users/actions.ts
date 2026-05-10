@@ -123,3 +123,28 @@ export async function inviteUser(input: InviteInput): Promise<InviteResult> {
     return { ok: false, error: humanizeError(err) };
   }
 }
+
+// Resend the Supabase Auth invite email for a pending user. Works only
+// while the user is still unconfirmed (email_confirmed_at is null) —
+// inviteUserByEmail rejects already-confirmed users with "User already
+// registered". We gate the UI to pending-only, so the rejection path
+// only fires if someone races a confirm.
+//
+// platform_users + agents rows already exist for the pending user;
+// this call only touches auth.users to mint a new link + re-send email.
+export async function resendInvite(email: string): Promise<InviteResult> {
+  try {
+    await assertAdmin();
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return { ok: false, error: "Email is required." };
+    const supabase = createSupabaseServiceRoleClient();
+    const { error } = await supabase.auth.admin.inviteUserByEmail(normalized, {
+      redirectTo: `${siteUrl()}/auth/setup-password`,
+    });
+    if (error) return { ok: false, error: humanizeError(error) };
+    revalidatePath("/users");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: humanizeError(err) };
+  }
+}
