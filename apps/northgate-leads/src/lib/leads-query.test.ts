@@ -22,6 +22,7 @@ const baseFilters: LeadFilters = {
   temps: [],
   agents: [],
   statuses: [],
+  states: [],
   dir: "desc",
   page: 1,
   perPage: 50,
@@ -35,6 +36,7 @@ describe("parseFilters", () => {
       temps: [],
       agents: [],
       statuses: [],
+      states: [],
       since: undefined,
       sort: undefined,
       dir: "desc",
@@ -53,6 +55,21 @@ describe("parseFilters", () => {
     expect(
       parseFilters({ status: ["new", "bogus"] }).statuses,
     ).toEqual(["new"]);
+  });
+
+  it("parses multi-value state filter", () => {
+    expect(parseFilters({ state: ["CA", "NY", "TX"] }).states).toEqual([
+      "CA",
+      "NY",
+      "TX",
+    ]);
+  });
+
+  it("filters out non-US-state state codes", () => {
+    expect(parseFilters({ state: ["CA", "ZZ", "NY"] }).states).toEqual([
+      "CA",
+      "NY",
+    ]);
   });
 
   it("parses valid sort + dir", () => {
@@ -88,6 +105,7 @@ describe("parseFilters", () => {
       temps: ["hot"],
       agents: ["abc-123"],
       statuses: [],
+      states: [],
       since: "30d",
       sort: undefined,
       dir: "desc",

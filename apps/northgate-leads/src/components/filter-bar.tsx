@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { XIcon } from "lucide-react";
+import { US_STATES } from "@platform/shared/validation/common";
 import { Button } from "@/components/ui/button";
 import { FilterMenu } from "@/components/filter-menu";
 import { AddFilterButton } from "@/components/add-filter-button";
@@ -62,6 +63,8 @@ const STATUS_OPTIONS = LEAD_STATUS_VALUES.map((v) => ({
   label: LEAD_STATUS_LABEL[v],
 }));
 
+const STATE_OPTIONS = US_STATES.map((s) => ({ value: s, label: s }));
+
 // Primary row (Status, Agent, Brand) is always visible. Overflow filters
 // (Product, Temperature, Created) live behind "+ Filter" until the user
 // either picks a value (URL keeps it visible) or manually promotes one.
@@ -88,6 +91,7 @@ export function FilterBar({
   const statusesSelected = getMulti(searchParams, "status");
   const sinceSelected = getSingle(searchParams, "since");
   const agentsSelected = getMulti(searchParams, "agent");
+  const statesSelected = getMulti(searchParams, "state");
 
   const productPromoted =
     productsSelected.length > 0 || manuallyPromoted.has("product");
@@ -95,6 +99,8 @@ export function FilterBar({
     tempsSelected.length > 0 || manuallyPromoted.has("temp");
   const sincePromoted =
     Boolean(sinceSelected) || manuallyPromoted.has("since");
+  const statePromoted =
+    statesSelected.length > 0 || manuallyPromoted.has("state");
 
   const hasAnyFilter =
     brandsSelected.length > 0 ||
@@ -102,7 +108,8 @@ export function FilterBar({
     tempsSelected.length > 0 ||
     statusesSelected.length > 0 ||
     Boolean(sinceSelected) ||
-    agentsSelected.length > 0;
+    agentsSelected.length > 0 ||
+    statesSelected.length > 0;
 
   const agentOptions: { value: string; label: string }[] = isAdmin && agents
     ? [
@@ -115,6 +122,7 @@ export function FilterBar({
     productPromoted ? null : { key: "product", label: "Product" },
     tempPromoted ? null : { key: "temp", label: "Temperature" },
     sincePromoted ? null : { key: "since", label: "Created" },
+    statePromoted ? null : { key: "state", label: "State" },
   ].filter((x): x is { key: string; label: string } => x !== null);
 
   function handleAddFilter(key: string) {
@@ -167,6 +175,11 @@ export function FilterBar({
       summary:
         SINCE_OPTIONS.find((o) => o.value === sinceSelected)?.label ??
         sinceSelected,
+    },
+    statesSelected.length > 0 && {
+      key: "state",
+      label: "State",
+      summary: summarize(STATE_OPTIONS, statesSelected),
     },
   ].filter((c): c is ActiveChip => Boolean(c));
 
@@ -228,6 +241,16 @@ export function FilterBar({
             options={SINCE_OPTIONS}
             selected={sinceSelected ? [sinceSelected] : []}
             mode="single"
+            searchParams={searchParams}
+          />
+        )}
+        {statePromoted && (
+          <FilterMenu
+            label="State"
+            paramKey="state"
+            options={STATE_OPTIONS}
+            selected={statesSelected}
+            mode="multi"
             searchParams={searchParams}
           />
         )}

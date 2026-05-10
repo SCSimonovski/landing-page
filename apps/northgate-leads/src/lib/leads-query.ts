@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@platform/shared/types/database";
+import { US_STATES } from "@platform/shared/validation/common";
 import { getMulti, getSingle, type SearchParams } from "./url-params";
 import {
   isLeadStatus,
@@ -30,6 +31,7 @@ export type LeadFilters = {
   temps: Array<"hot" | "warm" | "cold">;
   agents: string[]; // agent.id values, OR the literal "unassigned"
   statuses: LeadStatus[];
+  states: string[]; // US state codes, whitelisted against US_STATES
   // Single-value:
   since?: "7d" | "30d" | "90d";
   // User-controllable sort. undefined = default (created_at desc).
@@ -95,12 +97,18 @@ export function parseFilters(params: SearchParams): LeadFilters {
     isLeadStatus(s),
   ) as LeadStatus[];
 
+  // Whitelist against US_STATES so a hand-crafted ?state=ZZ doesn't reach
+  // the DB query as a confusing no-results filter.
+  const stateAllowed = new Set<string>(US_STATES);
+  const states = getMulti(params, "state").filter((s) => stateAllowed.has(s));
+
   return {
     brands: getMulti(params, "brand"),
     products: getMulti(params, "product"),
     temps,
     agents: getMulti(params, "agent"),
     statuses,
+    states,
     since: sinceTyped,
     sort,
     dir,
@@ -167,6 +175,7 @@ export function buildLeadsQuery(
   if (filters.products.length > 0) q = q.in("product", filters.products);
   if (filters.temps.length > 0) q = q.in("temperature", filters.temps);
   if (filters.statuses.length > 0) q = q.in("status", filters.statuses);
+  if (filters.states.length > 0) q = q.in("state", filters.states);
 
   const cutoff = sinceToCutoff(filters.since);
   if (cutoff) q = q.gte("created_at", cutoff);
