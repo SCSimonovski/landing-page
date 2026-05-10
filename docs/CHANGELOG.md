@@ -4,6 +4,18 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-05-11 — Swappable email transport (Gmail SMTP for pre-launch)
+
+Welcome emails (post-form-submit) were stuck on Resend's `onboarding@resend.dev` test sender, which only delivers to the email address that owns the Resend account. We don't have a verified consumer domain yet (gates on LLC + brand decision), so end-to-end testing with arbitrary recipients was blocked.
+
+Added a swappable email transport (`packages/shared/email/transport.ts`) — a tiny `EmailTransport` interface + `getEmailTransport()` factory that picks Gmail SMTP (nodemailer) or Resend at runtime via `EMAIL_TRANSPORT`. Same response shape (`{ id, error }`) so `welcome.ts` doesn't care which is underneath. New env vars: `EMAIL_TRANSPORT` (`gmail` | `resend`, defaults to `resend`), `GMAIL_USER`, `GMAIL_APP_PASSWORD` — env count goes 17 → 20.
+
+Pre-launch posture: `EMAIL_TRANSPORT=gmail`, `FROM_EMAIL=<your-gmail>` (Gmail rewrites the From header to the SMTP user regardless, so they have to match). Production switch: drop the var and update `FROM_EMAIL` to the verified consumer domain — no code change.
+
+Caveats acknowledged: Gmail caps at ~500 sends/day on personal accounts; from-address looks personal; deliverability worse than a verified Resend domain. All fine for testing volume; not for launch.
+
+---
+
 ## 2026-05-10 — Plan 5++: post-merge polish (mobile, filter UX, palette, search, export)
 
 Same `v03-platform` branch, last ~24h of iteration before merge. No DB changes.

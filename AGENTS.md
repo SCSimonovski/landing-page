@@ -228,7 +228,7 @@ After build: update § 9 here (next task), append an entry to `docs/CHANGELOG.md
   6. Vercel: Northgate Heritage project's Environment Variables
   7. Vercel: Northgate Leads project's Environment Variables
 
-  Run `pnpm verify-envs` before pushing to confirm the local-side four are in sync (key sets only — values legitimately differ per environment). Vercel-side requires manual per-project dashboard verification. **After any rotation, redeploy each Vercel project** to pick up the new value (Vercel does NOT auto-redeploy on env-var changes). Currently 17 keys × 4 local locations.
+  Run `pnpm verify-envs` before pushing to confirm the local-side four are in sync (key sets only — values legitimately differ per environment). Vercel-side requires manual per-project dashboard verification. **After any rotation, redeploy each Vercel project** to pick up the new value (Vercel does NOT auto-redeploy on env-var changes). Currently 20 keys × 4 local locations.
 
 ---
 
