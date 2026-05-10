@@ -26,18 +26,19 @@ export default async function LeadsPage({
   const params = await searchParams;
   const filters = parseFilters(params);
 
+  const supabase = await createSupabaseServerClient();
   const platformUser = await getPlatformUser();
+  // Sign out before redirecting to /login. Otherwise the auth session
+  // lingers, middleware redirects /login → /leads (REDIRECT_IF_AUTHED),
+  // /leads redirects back here → ERR_TOO_MANY_REDIRECTS.
   if (!platformUser) {
-    // Authenticated session exists (middleware would've redirected otherwise),
-    // but no platform_users row → admin hasn't provisioned this user yet.
-    // Sign them out so they don't loop on /leads.
+    await supabase.auth.signOut();
     redirect("/login?error=not_provisioned");
   }
   if (!platformUser.active) {
+    await supabase.auth.signOut();
     redirect("/login?error=inactive");
   }
-
-  const supabase = await createSupabaseServerClient();
 
   // For admin/superadmin: load the agents list for the agent filter dropdown.
   // For agent role: skip (their UI doesn't show the agent filter).

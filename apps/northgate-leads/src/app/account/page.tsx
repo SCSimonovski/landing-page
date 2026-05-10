@@ -21,11 +21,18 @@ export const dynamic = "force-dynamic";
 // non-agent calls it (Plan 5 Decision #18).
 
 export default async function AccountPage() {
-  const platformUser = await getPlatformUser();
-  if (!platformUser) redirect("/login?error=not_provisioned");
-  if (!platformUser.active) redirect("/login?error=inactive");
-
   const supabase = await createSupabaseServerClient();
+  const platformUser = await getPlatformUser();
+  // Sign out before redirecting; otherwise middleware loops /login → /leads
+  // → /account → /login (REDIRECT_IF_AUTHED on /login).
+  if (!platformUser) {
+    await supabase.auth.signOut();
+    redirect("/login?error=not_provisioned");
+  }
+  if (!platformUser.active) {
+    await supabase.auth.signOut();
+    redirect("/login?error=inactive");
+  }
   const {
     data: { user: authUser },
   } = await supabase.auth.getUser();
