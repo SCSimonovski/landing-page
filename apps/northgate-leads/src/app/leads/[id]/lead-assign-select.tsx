@@ -64,7 +64,7 @@ export function LeadAssignSelect({
 
   return (
     <Select value={optimistic} onValueChange={handleChange} disabled={pending}>
-      <SelectTrigger className="w-[200px]">
+      <SelectTrigger className="w-full">
         <SelectValue placeholder="Pick an agent" />
       </SelectTrigger>
       <SelectContent>

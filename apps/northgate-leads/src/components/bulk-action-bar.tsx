@@ -245,19 +245,30 @@ export function BulkActionBar({
 
   return (
     <>
-      <div className="sticky top-0 z-20 border-b bg-card px-6 py-3 shadow-sm">
-        <div className="mx-auto max-w-7xl flex flex-wrap items-center gap-3">
-          <span className="text-sm font-medium">
-            {count} lead{count === 1 ? "" : "s"} selected
-          </span>
-          <div className="flex flex-wrap items-center gap-2 ml-auto">
+      <div className="sticky top-0 z-20 border-b bg-card px-4 py-3 shadow-sm sm:px-6">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex items-center justify-between gap-2 sm:justify-start">
+            <span className="text-sm font-medium">
+              {count} lead{count === 1 ? "" : "s"} selected
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clear}
+              disabled={disabled}
+              className="-mr-2 h-8 sm:hidden"
+            >
+              <XIcon className="size-3.5" /> Clear
+            </Button>
+          </div>
+          <div className="flex flex-col gap-2 sm:ml-auto sm:flex-row sm:items-center">
             {isAdmin && (
               <Select
                 value={assignValue}
                 onValueChange={handleAssignChange}
                 disabled={disabled}
               >
-                <SelectTrigger className="h-8 w-[180px]">
+                <SelectTrigger className="h-8 w-full sm:w-[180px]">
                   <SelectValue placeholder="Assign to agent…" />
                 </SelectTrigger>
                 <SelectContent>
@@ -279,7 +290,7 @@ export function BulkActionBar({
               onValueChange={handleStatusChange}
               disabled={disabled}
             >
-              <SelectTrigger className="h-8 w-[160px]">
+              <SelectTrigger className="h-8 w-full sm:w-[160px]">
                 <SelectValue placeholder="Set status…" />
               </SelectTrigger>
               <SelectContent>
@@ -295,7 +306,7 @@ export function BulkActionBar({
               size="sm"
               onClick={clear}
               disabled={disabled}
-              className="h-8"
+              className="hidden h-8 sm:inline-flex"
             >
               <XIcon className="size-3.5" /> Clear
             </Button>

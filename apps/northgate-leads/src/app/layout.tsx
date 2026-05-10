@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { AppSidebar } from "@/components/app-sidebar";
+import { NorthgateLeadsLogo } from "@/components/northgate-leads-logo";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getPlatformUser } from "@/lib/auth/get-platform-user";
 import "./globals.css";
@@ -52,13 +53,20 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
+      data-scroll-behavior="smooth"
       className={`${geist.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-svh bg-background text-foreground">
         {showShell ? (
           <SidebarProvider defaultOpen={sidebarOpen}>
             <AppSidebar user={platformUser!} email={authUser!.email ?? ""} />
-            <SidebarInset>{children}</SidebarInset>
+            <SidebarInset>
+              <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card px-3 md:hidden">
+                <SidebarTrigger />
+                <NorthgateLeadsLogo className="h-10 w-auto" />
+              </header>
+              {children}
+            </SidebarInset>
           </SidebarProvider>
         ) : (
           children

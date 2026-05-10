@@ -103,7 +103,7 @@ export default async function LeadsPage({
         role={platformUser.role}
         agents={agentsForFilter}
       />
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto w-full min-w-0 max-w-7xl">
         <LeadTable
           leads={(leads ?? []) as unknown as Parameters<typeof LeadTable>[0]["leads"]}
           role={platformUser.role}

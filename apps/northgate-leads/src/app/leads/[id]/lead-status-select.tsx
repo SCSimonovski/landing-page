@@ -9,7 +9,6 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -58,17 +57,19 @@ export function LeadStatusSelect({
     startTransition(() => router.refresh());
   }
 
-  // <SelectValue> stays a leaf (sr-only here so Radix can keep its
-  // accessibility contract); we render the visible badge ourselves inside
-  // the trigger. React 19 throws "Cannot use a ref ... if that element
-  // also sets children" when you put custom children inside SelectValue.
+  // No <SelectValue>: Radix auto-renders the selected ItemText into it,
+  // which duplicates the badge inside the trigger. We render the badge
+  // ourselves and provide an aria-label on the trigger so screen readers
+  // still announce the current value.
   return (
     <Select value={optimistic} onValueChange={handleChange} disabled={pending}>
-      <SelectTrigger className="w-[180px]">
+      <SelectTrigger
+        className="w-full"
+        aria-label={`Status: ${LEAD_STATUS_LABEL[optimistic]}`}
+      >
         <Badge className={cn(LEAD_STATUS_BADGE_CLASS[optimistic])}>
           {LEAD_STATUS_LABEL[optimistic]}
         </Badge>
-        <SelectValue className="sr-only" />
       </SelectTrigger>
       <SelectContent>
         {LEAD_STATUS_VALUES.map((s) => (

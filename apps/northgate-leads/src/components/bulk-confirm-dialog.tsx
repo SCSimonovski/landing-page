@@ -118,9 +118,9 @@ function StatusBody({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle>
-          Set status → {newLabel} on {totalChange} lead
+      <DialogHeader className="text-left">
+        <DialogTitle className="text-base sm:text-lg">
+          Set {newLabel} on {totalChange} lead
           {totalChange === 1 ? "" : "s"}?
         </DialogTitle>
         <DialogDescription asChild>
@@ -171,8 +171,8 @@ function StatusBody({
               </ul>
             </div>
             {hasRegressions && (
-              <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3">
-                <AlertTriangleIcon className="size-4 shrink-0 text-destructive mt-0.5" />
+              <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3">
+                <AlertTriangleIcon className="size-4 shrink-0 text-destructive" />
                 <p className="text-destructive text-sm">
                   {input.regressionIds.length} lead
                   {input.regressionIds.length === 1 ? "" : "s"} would move{" "}
@@ -184,7 +184,7 @@ function StatusBody({
           </div>
         </DialogDescription>
       </DialogHeader>
-      <DialogFooter className="flex-col sm:flex-row gap-2">
+      <DialogFooter>
         <Button
           variant="outline"
           onClick={() => onCancel()}
@@ -242,9 +242,9 @@ function AssignBody({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle>
-          Reassign {total} lead{total === 1 ? "" : "s"} → {input.newAgentLabel}?
+      <DialogHeader className="text-left">
+        <DialogTitle className="text-base sm:text-lg pr-4">
+          Reassign {total} lead{total === 1 ? "" : "s"} to {input.newAgentLabel}?
         </DialogTitle>
         <DialogDescription asChild>
           <div className="space-y-3 text-sm">
@@ -285,8 +285,8 @@ function AssignBody({
               </ul>
             </div>
             {pulledCount > 0 && (
-              <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
-                <AlertTriangleIcon className="size-4 shrink-0 text-amber-700 mt-0.5" />
+              <div className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
+                <AlertTriangleIcon className="size-4 shrink-0 text-amber-700" />
                 <p className="text-amber-800 text-sm">
                   {`${pulledCount} lead${pulledCount === 1 ? "" : "s"} will be pulled from their current agents. They'll lose access immediately on save.`}
                 </p>

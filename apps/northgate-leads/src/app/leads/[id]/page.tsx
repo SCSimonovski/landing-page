@@ -250,7 +250,7 @@ export default async function LeadDetailPage({
         </div>
 
         <Card>
-          <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle className="text-2xl">
                 {lead.first_name} {lead.last_name}
@@ -259,7 +259,7 @@ export default async function LeadDetailPage({
                 Created {formatTimestamp(lead.created_at)}
               </CardDescription>
             </div>
-            <div className="flex flex-col items-end gap-2">
+            <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
               <LeadStatusSelect leadId={lead.id} currentStatus={lead.status} />
               {isAdmin && agentsList && (
                 <LeadAssignSelect
@@ -282,7 +282,7 @@ export default async function LeadDetailPage({
             <CardTitle className="text-base">Contact</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4 text-sm">
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <p className="text-muted-foreground text-xs">Phone</p>
               <a
                 href={`tel:${lead.phone_e164}`}
@@ -291,7 +291,7 @@ export default async function LeadDetailPage({
                 {formatPhone(lead.phone_e164)}
               </a>
             </div>
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <p className="text-muted-foreground text-xs">Email</p>
               <a
                 href={`mailto:${lead.email}`}
@@ -396,14 +396,14 @@ export default async function LeadDetailPage({
               Status changes, assignments, system events.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
+          <CardContent className="space-y-4 text-sm">
             {events.length === 0 ? (
               <p className="text-muted-foreground">No activity yet.</p>
             ) : (
               events.map((ev) => (
                 <div
                   key={ev.id}
-                  className="flex items-baseline gap-3 text-xs border-l-2 border-muted pl-3"
+                  className="flex flex-col gap-1 text-xs border-l-2 border-muted pl-3 sm:flex-row sm:items-baseline sm:gap-3"
                 >
                   <span className="text-muted-foreground whitespace-nowrap">
                     {formatTimestamp(ev.created_at)}
@@ -443,7 +443,7 @@ function StatusChangeLine({ ev }: { ev: EventRow }) {
   const oldS = data.old as LeadStatus | undefined;
   const newS = data.new as LeadStatus | undefined;
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="inline-flex flex-wrap items-center gap-1.5">
       <span>{actor}: status</span>
       {oldS && (
         <Badge className={cn(LEAD_STATUS_BADGE_CLASS[oldS])}>
