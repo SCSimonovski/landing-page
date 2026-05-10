@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { XIcon } from "lucide-react";
+import { DownloadIcon, XIcon } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +24,11 @@ import {
   isStatusRegression,
   type LeadStatus,
 } from "@/lib/leads/lead-status-options";
+import {
+  buildLeadCsv,
+  exportFilename,
+  type ExportLead,
+} from "@/lib/leads/export-csv";
 
 // Sticky action bar at the top of the leads view. Renders only when
 // selection is non-empty.
@@ -241,6 +246,46 @@ export function BulkActionBar({
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Export action — fetches the selected leads (RLS-scoped: agents get their
+  // own, admins get all), builds a CSV in the browser, triggers a download.
+  // No new API endpoint; bounded by the in-page selection (Plan 5 cap = 100).
+  // ---------------------------------------------------------------------------
+  async function handleExport() {
+    setSubmitting(true);
+    const supabase = createSupabaseBrowserClient();
+    const ids = Array.from(selected);
+    const { data, error } = await supabase
+      .from("leads")
+      .select(
+        "created_at, brand, product, first_name, last_name, phone_e164, email, state, age, intent_score, temperature, status, notes, on_dnc, agent:agents(full_name)",
+      )
+      .in("id", ids)
+      .order("created_at", { ascending: false });
+    setSubmitting(false);
+
+    if (error) {
+      toast.error(`Export failed: ${error.message}`);
+      return;
+    }
+    const rows = (data as unknown as ExportLead[] | null) ?? [];
+    const csv = buildLeadCsv(rows);
+    const filename = exportFilename();
+    // BOM so Excel opens UTF-8 correctly.
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(
+      `Exported ${rows.length} lead${rows.length === 1 ? "" : "s"} as ${filename}`,
+    );
+  }
+
   const disabled = pending || submitting;
 
   return (
@@ -301,6 +346,15 @@ export function BulkActionBar({
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={disabled}
+              className="h-8 w-full sm:w-auto"
+            >
+              <DownloadIcon className="size-3.5" /> Export CSV
+            </Button>
             <Button
               variant="ghost"
               size="sm"
