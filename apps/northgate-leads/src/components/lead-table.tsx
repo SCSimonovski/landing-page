@@ -41,7 +41,7 @@ export type LeadRowData = {
   details: Record<string, unknown> | null;
   on_dnc: boolean;
   agent_id: string | null;
-  agent?: { id: string; full_name: string } | null;
+  agent_full_name: string | null;
 };
 
 // Sortable column header. Lives at module scope (React 19 lints inner

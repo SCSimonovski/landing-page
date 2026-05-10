@@ -42,7 +42,7 @@ type LeadRowData = {
   details: Record<string, unknown> | null;
   on_dnc: boolean;
   agent_id: string | null;
-  agent?: { id: string; full_name: string } | null;
+  agent_full_name: string | null;
 };
 
 function formatPhone(e164: string): string {
@@ -142,7 +142,7 @@ export function LeadRow({
       </TableCell>
       {isAdmin && (
         <TableCell className="whitespace-nowrap text-foreground">
-          {lead.agent?.full_name ?? (
+          {lead.agent_full_name ?? (
             <span className="text-muted-foreground italic">— unassigned —</span>
           )}
         </TableCell>

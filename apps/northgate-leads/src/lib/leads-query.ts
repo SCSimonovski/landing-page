@@ -56,8 +56,8 @@ const SINCE_VALUES = new Set(["7d", "30d", "90d"]);
 // not useful sort dimensions; phone / email alphabetical sort is weird;
 // details is JSONB.
 //
-// `assigned_agent_name` is a special case in buildLeadsQuery: it sorts by
-// the joined agents.full_name column via Supabase's `foreignTable` option.
+// `assigned_agent_name` maps to the `leads_with_agent` view's flat
+// `agent_full_name` column (see buildLeadsQuery).
 const SORT_COLUMNS = new Set<SortColumn>([
   "created_at",
   "last_name",
@@ -134,46 +134,35 @@ export function sinceToCutoff(since: LeadFilters["since"]): string | null {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
-// Build the leads query for the platform's leads table.
-//
-// `role` controls whether to join `agents` (admin/superadmin get the assigned
-// agent's full_name in the row); for agent role we skip the join (their leads
-// are all theirs by definition; the join would be wasted).
-//
-// Returns the chained query (not awaited) so the caller awaits it. The query
-// uses `count: 'exact'` so the response includes the total row count for
-// pagination's "Showing X-Y of Z" line.
+// Build the leads read query. Reads from `leads_with_agent`, a
+// security_invoker=on view that flattens leads + agents and exposes
+// `agent_full_name` as a native column (so .order() works on it
+// without PostgREST's one-to-one embed-sort quirks). RLS is inherited
+// from `leads` and `agents`. `count: 'exact'` for pagination totals.
 export function buildLeadsQuery(
   filters: LeadFilters,
   role: LeadsQueryRole,
   supabase: AnySupabaseClient,
 ) {
-  // Admin/superadmin: join the assigned agent for the "Assigned" column.
-  // Only one FK from leads to agents exists; alias to `agent` for cleaner
-  // field naming on the row (singular makes the LeadTable cell read better).
-  const select = role === "agent" ? "*" : "*, agent:agents(id, full_name)";
-
   // Default sort: created_at desc. User-controllable sort overrides via
   // ?sort=<column>&dir=<asc|desc>; the column is whitelisted in
   // parseFilters so .order() never sees an arbitrary string.
   //
-  // assigned_agent_name is the foreign-table special case — sorts by the
-  // joined agents.full_name via Supabase's `foreignTable` option. Skipped
-  // for agent role (their leads are all theirs; agent join not selected).
+  // assigned_agent_name maps to the view's flat `agent_full_name` column.
+  // Unassigned leads (agent_full_name null) cluster last via nullsFirst:false.
   const ascending = filters.dir === "asc";
-  let q = supabase.from("leads").select(select, { count: "exact" });
+  let q = supabase.from("leads_with_agent").select("*", { count: "exact" });
 
-  if (
-    filters.sort === "assigned_agent_name" &&
-    role !== "agent"
-  ) {
-    q = q.order("full_name", { foreignTable: "agent", ascending });
+  if (filters.sort === "assigned_agent_name") {
+    if (role === "agent") {
+      // Agent's leads are all theirs by definition; no useful sort to do.
+      q = q.order("created_at", { ascending: false });
+    } else {
+      q = q.order("agent_full_name", { ascending, nullsFirst: false });
+    }
   } else {
     const sortCol = filters.sort ?? "created_at";
-    // Skip the assigned_agent_name case for agent role; fall back to default.
-    const safeCol =
-      sortCol === "assigned_agent_name" ? "created_at" : sortCol;
-    q = q.order(safeCol, { ascending });
+    q = q.order(sortCol, { ascending });
   }
 
   // Multi-value filters use .in(). Single value works too (Supabase handles

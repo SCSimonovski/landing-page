@@ -203,11 +203,11 @@ describe("buildLeadsQuery", () => {
     expect(select?.args[0]).toBe("*");
   });
 
-  it("admin role: select includes agents join", () => {
+  it("read path uses leads_with_agent view (not the leads table)", () => {
     const { client, calls } = makeMockClient();
     buildLeadsQuery(baseFilters, "admin", client);
-    const select = calls.find((c) => c.method === "select");
-    expect(select?.args[0]).toContain("agent:agents");
+    const from = calls.find((c) => c.method === "from");
+    expect(from?.args[0]).toBe("leads_with_agent");
   });
 
   it("default sort: created_at desc", () => {
@@ -253,7 +253,7 @@ describe("buildLeadsQuery", () => {
     });
   });
 
-  it("admin: assigned_agent_name sort uses foreignTable=agent", () => {
+  it("admin: assigned_agent_name sort uses agent_full_name (view column), nullsLast", () => {
     const { client, calls } = makeMockClient();
     buildLeadsQuery(
       { ...baseFilters, sort: "assigned_agent_name", dir: "asc" },
@@ -262,12 +262,12 @@ describe("buildLeadsQuery", () => {
     );
     const order = calls.find((c) => c.method === "order");
     expect(order?.args).toEqual([
-      "full_name",
-      { foreignTable: "agent", ascending: true },
+      "agent_full_name",
+      { ascending: true, nullsFirst: false },
     ]);
   });
 
-  it("agent: assigned_agent_name sort falls back to default (no agent join)", () => {
+  it("agent: assigned_agent_name sort falls back to created_at desc", () => {
     const { client, calls } = makeMockClient();
     buildLeadsQuery(
       { ...baseFilters, sort: "assigned_agent_name", dir: "asc" },
@@ -275,7 +275,7 @@ describe("buildLeadsQuery", () => {
       client,
     );
     const order = calls.find((c) => c.method === "order");
-    expect(order?.args).toEqual(["created_at", { ascending: true }]);
+    expect(order?.args).toEqual(["created_at", { ascending: false }]);
   });
 
   it("single brand filter via .in", () => {

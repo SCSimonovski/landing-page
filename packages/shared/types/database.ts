@@ -88,6 +88,13 @@ export type Database = {
             referencedRelation: "leads"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "consent_log_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_with_agent"
+            referencedColumns: ["id"]
+          },
         ]
       }
       dnc_registry: {
@@ -146,6 +153,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_events_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads_with_agent"
             referencedColumns: ["id"]
           },
         ]
@@ -307,7 +321,49 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      leads_with_agent: {
+        Row: {
+          age: number | null
+          agent_full_name: string | null
+          agent_id: string | null
+          best_time_to_call: Database["public"]["Enums"]["time_of_day"] | null
+          brand: string | null
+          created_at: string | null
+          details: Json | null
+          email: string | null
+          fbc: string | null
+          fbclid: string | null
+          fbp: string | null
+          first_contact_at: string | null
+          first_name: string | null
+          id: string | null
+          intent_score: number | null
+          landing_page_variant: string | null
+          last_name: string | null
+          notes: string | null
+          on_dnc: boolean | null
+          outcome: string | null
+          phone_e164: string | null
+          policy_value: number | null
+          product: string | null
+          state: string | null
+          status: Database["public"]["Enums"]["lead_status"] | null
+          temperature: Database["public"]["Enums"]["lead_temperature"] | null
+          utm_adset: string | null
+          utm_campaign: string | null
+          utm_creative: string | null
+          utm_source: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       assign_lead: {
