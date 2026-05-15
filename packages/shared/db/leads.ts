@@ -80,11 +80,17 @@ export async function isOnDNC(phone: string): Promise<boolean> {
   return data !== null;
 }
 
-// 30-day phone dedup pre-flight check. Application-level only — the partial
-// unique index from the playbook spec was dropped because now() is STABLE
-// (see AGENTS.md § 6).
+// 30-day dedup pre-flight check, scoped to (phone, brand, product).
+// Application-level only — the partial unique index from the playbook spec
+// was dropped because now() is STABLE (see AGENTS.md § 6).
+//
+// Cross-product / cross-brand re-submissions are intentionally NOT deduped:
+// a different product (or a different brand even for the same product) is a
+// different agent qualification, different ad spend, different consent
+// context — a genuinely new lead. The 30-day window only protects against
+// double-billing for the *same* (brand, product) intent.
 export async function findRecentDuplicate(
-  phone: string,
+  args: { phone: string; brand: string; product: string },
 ): Promise<{ id: string } | null> {
   const supabase = createServiceRoleClient();
   const thirtyDaysAgo = new Date(
@@ -93,7 +99,9 @@ export async function findRecentDuplicate(
   const { data, error } = await supabase
     .from("leads")
     .select("id")
-    .eq("phone_e164", phone)
+    .eq("phone_e164", args.phone)
+    .eq("brand", args.brand)
+    .eq("product", args.product)
     .gt("created_at", thirtyDaysAgo)
     .order("created_at", { ascending: false })
     .limit(1)
