@@ -4,6 +4,22 @@ Reverse chronological. What shipped, when, and any notes a future reader (or fut
 
 ---
 
+## 2026-05-15 — Fix: 30-day dedup scoped to (phone, brand, product), not phone alone
+
+`findRecentDuplicate(phone)` filtered only on `phone_e164`, so a same-phone resubmission across products (Heritage final_expense → NP mortgage_protection) or across brands (or even just a different product within the same brand, hypothetically) was silently swallowed: 200 returned with the *original* lead's id, a `duplicate_attempt` event written against it, and the second submission **never written to `leads`** — never SMS'd to the agent, never billable, never visible in the platform. This reverses Plan 2b's deliberate "first-seen brand wins" decision (documented in Heritage's old route.ts comment) — that framing was wrong because cross-product is a different agent qualification, different commission, different sales pitch, and cross-brand is fresh ad spend with a separate consent flow.
+
+`findRecentDuplicate` signature widened to `({ phone, brand, product })` and the `.eq("brand", ...).eq("product", ...)` filters added to the lookup. Both consumer apps' `/api/leads` route.ts updated to pass the brand + product they already hard-code elsewhere in the same handler. Heritage's `attempted_brand` event_data field dropped — it's now redundant with the duplicated lead's own `brand` column (since dups can only come from the same brand).
+
+Why `(phone, brand, product)` and not just `(phone, product)`: future-proofs both axes. If either brand later runs more than one product, each product's window stays independent within that brand; if two brands ever surface the same product (different ad creative, different buying agent, different consent flow), each brand's window is also independent.
+
+**Pre-fix cross-product silent-dedups are unrecoverable.** The second submission was never written to `leads`; only the `duplicate_attempt` event lives on the *wrong* lead row. There is no SQL recovery — the data was never persisted. Any operator audit of "leads we should have but don't" needs to source from Vercel's request logs against `/api/leads`, not from the DB.
+
+Playbook docs updated to match: `01_Strategy_and_Offer.md` § "Cross-brand operational rules"; `02_Technical_Reference.md` schema spec; `04_Operations_Runbook.md` § 6.2 + cross-brand-vs-per-brand table. All five spots changed from "per product" to "per (brand, product)".
+
+No DB changes; no migration. App-level only. Lint + typecheck both consumer apps clean; existing unit suite stays green (no new tests — `findRecentDuplicate` is a thin Supabase wrapper; would need a real integration test against a fixture DB to be meaningful).
+
+---
+
 ## 2026-05-11 — Plan 5b: platform_users.full_name (canonical display name for every role)
 
 Pre-Plan-5b state: `full_name` only existed on `agents.full_name` and was only meaningful for `role='agent'`. Admin / superadmin had no display name — the sidebar footer, "Assigned: …" pill, activity timeline actor, and /users Full name column all fell back to email or showed "—". Surface symptom: invite admin / superadmin → invite dialog never closed (the form silently failed Zod with the hidden `full_name: ""` default not being parseable as `.optional()`-but-non-empty). Architect-approved fix is the structural one — make full_name first-class on `platform_users` and use it everywhere.

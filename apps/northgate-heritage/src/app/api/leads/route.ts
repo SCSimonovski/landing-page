@@ -75,15 +75,19 @@ export async function POST(req: Request) {
     //    dnc_registry at dispatch time.
     const on_dnc = await isOnDNC(phone_e164);
 
-    // 8. 30-day duplicate phone check. Cross-brand: a lead that came in via
-    //    NP within the last 30 days will dedupe here too. The first-seen
-    //    brand wins for routing; we record the duplicate attempt with the
-    //    brand context for audit.
-    const dup = await findRecentDuplicate(phone_e164);
+    // 8. 30-day dedup, scoped to (phone, brand, product). A Heritage
+    //    final_expense submission only dedupes against another Heritage
+    //    final_expense within 30 days — a same-phone NP mortgage_protection
+    //    lead from last week is a different product intent and lands as a
+    //    fresh lead. See findRecentDuplicate's doc for the rationale.
+    const dup = await findRecentDuplicate({
+      phone: phone_e164,
+      brand: "northgate-heritage",
+      product: "final_expense",
+    });
     if (dup) {
       await recordDuplicateAttempt(dup.id, {
         source: "form_resubmit",
-        attempted_brand: "northgate-heritage",
         attempted_state: input.state,
       });
       return NextResponse.json({ ok: true, id: dup.id }, { status: 200 });

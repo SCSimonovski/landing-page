@@ -79,9 +79,15 @@ export async function POST(req: Request) {
     //    is a snapshot from insert time).
     const on_dnc = await isOnDNC(phone_e164);
 
-    // 8. 30-day duplicate phone check (application-level only — partial unique
-    //    index dropped per AGENTS.md § 6 because now() is STABLE).
-    const dup = await findRecentDuplicate(phone_e164);
+    // 8. 30-day dedup, scoped to (phone, brand, product) — application-level
+    //    only (partial unique index dropped per AGENTS.md § 6 because now()
+    //    is STABLE). Cross-product / cross-brand re-submissions land as
+    //    fresh leads — see findRecentDuplicate's doc for the rationale.
+    const dup = await findRecentDuplicate({
+      phone: phone_e164,
+      brand: "northgate-protection",
+      product: "mortgage_protection",
+    });
     if (dup) {
       await recordDuplicateAttempt(dup.id, {
         source: "form_resubmit",
